@@ -6,7 +6,7 @@ on:
       - 'output/today.txt'
     branches:
       - main
-   workflow_dispatch:
+  workflow_dispatch:
 jobs:
   send:
     runs-on: ubuntu-latest
