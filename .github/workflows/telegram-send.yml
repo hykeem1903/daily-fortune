@@ -15,15 +15,28 @@ jobs:
       - name: 체크아웃
         uses: actions/checkout@v4
 
-      - name: 텔레그램 전송
+      - name: 텔레그램 분할 전송
         env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           TEXT=$(cat output/today.txt)
-          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${CHAT_ID}" \
-            --data-urlencode "text=${TEXT}" \
-            -d "parse_mode=HTML" \
-            -w "\n%{http_code}" | tail -1 | grep -q "^200$" \
-            && echo "✅ 전송 성공" || echo "❌ 전송 실패"
+          MAX=4000
+          LENGTH=${#TEXT}
+          START=0
+          PART=1
+          while [ $START -lt $LENGTH ]; do
+            CHUNK="${TEXT:$START:$MAX}"
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${CHAT_ID}" \
+              --data-urlencode "text=${CHUNK}")
+            if [ "$RESPONSE" = "200" ]; then
+              echo "✅ 파트 $PART 전송 성공"
+            else
+              echo "❌ 파트 $PART 전송 실패 (HTTP $RESPONSE)"
+              exit 1
+            fi
+            START=$(( START + MAX ))
+            PART=$(( PART + 1 ))
+            sleep 1
+          done
