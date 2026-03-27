@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 텔레그램 전송
-        env:
+       env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
@@ -26,10 +26,3 @@ jobs:
             -d "parse_mode=HTML" \
             -w "\n%{http_code}" | tail -1 | grep -q "^200$" \
             && echo "✅ 전송 성공" || echo "❌ 전송 실패"
-on:
-  push:
-    paths:
-      - 'output/today.txt'
-    branches:
-      - main
-  workflow_dispatch:   # ← 이 줄 추가
