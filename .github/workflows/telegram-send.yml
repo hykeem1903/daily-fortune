@@ -26,3 +26,10 @@ jobs:
             -d "parse_mode=HTML" \
             -w "\n%{http_code}" | tail -1 | grep -q "^200$" \
             && echo "✅ 전송 성공" || echo "❌ 전송 실패"
+on:
+  push:
+    paths:
+      - 'output/today.txt'
+    branches:
+      - main
+  workflow_dispatch:   # ← 이 줄 추가
