@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 텔레그램 전송
-       env:
+        env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
