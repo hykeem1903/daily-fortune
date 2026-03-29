@@ -4,8 +4,15 @@
 기준 원국: 丁癸辛丙 / 卯卯未申
 """
 
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 import json, sys
+
+# KST = UTC+9
+KST = timezone(timedelta(hours=9))
+
+def today_kst() -> date:
+    """GitHub Actions는 UTC 기준이므로 KST 날짜를 명시적으로 반환"""
+    return datetime.now(KST).date()
 
 # ── 60갑자 ──────────────────────────────────────────────
 STEMS  = ["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"]
@@ -138,7 +145,7 @@ def get_wolun(today: date):
 # ── 메인 산출 ────────────────────────────────────────────
 def calc(today: date = None):
     if today is None:
-        today = date.today()
+        today = today_kst()
 
     idx, s, b, s_kr, b_kr = get_ganzhi(today)
 
@@ -255,7 +262,7 @@ def calc(today: date = None):
     return result
 
 if __name__ == "__main__":
-    target = date.today()
+    target = today_kst()
     if len(sys.argv) > 1:
         target = date.fromisoformat(sys.argv[1])
     data = calc(target)
