@@ -7,7 +7,7 @@ on:
     branches:
       - main
   workflow_dispatch:
-  
+
 jobs:
   send:
     runs-on: ubuntu-latest
@@ -15,7 +15,23 @@ jobs:
       - name: 체크아웃
         uses: actions/checkout@v4
 
+      - name: 커밋 메시지·날짜 검증
+        id: check
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          TODAY_KST=$(TZ='Asia/Seoul' date +%Y-%m-%d)
+          EXPECTED="운세: ${TODAY_KST}"
+          if [ "$COMMIT_MSG" = "$EXPECTED" ]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+          else
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "커밋 메시지 불일치 또는 날짜 오류 — 전송 건너뜀"
+            echo "  기대값: ${EXPECTED}"
+            echo "  실제값: ${COMMIT_MSG}"
+          fi
+
       - name: 텔레그램 분할 전송
+        if: steps.check.outputs.skip == 'false'
         env:
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
