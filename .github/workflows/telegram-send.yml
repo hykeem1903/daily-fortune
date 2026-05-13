@@ -20,13 +20,16 @@ jobs:
         run: |
           COMMIT_MSG=$(git log -1 --pretty=%s)
           TODAY_KST=$(TZ='Asia/Seoul' date +%Y-%m-%d)
-          EXPECTED="운세: ${TODAY_KST}"
-          if [ "$COMMIT_MSG" = "$EXPECTED" ]; then
+          YESTERDAY_KST=$(TZ='Asia/Seoul' date -d 'yesterday' +%Y-%m-%d)
+          EXPECTED_TODAY="운세: ${TODAY_KST}"
+          EXPECTED_YESTERDAY="운세: ${YESTERDAY_KST}"
+          if [ "$COMMIT_MSG" = "$EXPECTED_TODAY" ] || [ "$COMMIT_MSG" = "$EXPECTED_YESTERDAY" ]; then
             echo "skip=false" >> $GITHUB_OUTPUT
           else
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "커밋 메시지 불일치 또는 날짜 오류 — 전송 건너뜀"
-            echo "  기대값: ${EXPECTED}"
+            echo "  기대값(오늘): ${EXPECTED_TODAY}"
+            echo "  기대값(어제): ${EXPECTED_YESTERDAY}"
             echo "  실제값: ${COMMIT_MSG}"
           fi
 
