@@ -8,8 +8,8 @@
 
 ## STEP 1: 데이터 산출
 ```bash
-python3 fortune_calc.py              # 오늘 데이터
-python3 fortune_calc.py <내일날짜>   # 내일 데이터 (YYYY-MM-DD 형식)
+python3 fortune_calc.py                                        # 오늘 데이터 (KST 자동)
+python3 fortune_calc.py $(TZ='Asia/Seoul' date -d 'tomorrow' +%Y-%m-%d)  # 내일 데이터
 ```
 두 JSON 결과를 내부적으로 파싱하여 오늘·내일의 사주 데이터를 모두 획득한다.
 
@@ -127,7 +127,7 @@ mkdir -p output
 git config user.email "fortune-bot@auto"
 git config user.name "Fortune Bot"
 git add output/today.txt
-git commit -m "운세: $(date +%Y-%m-%d)"
+git commit -m "운세: $(TZ='Asia/Seoul' date +%Y-%m-%d)"
 git push
 ```
 
