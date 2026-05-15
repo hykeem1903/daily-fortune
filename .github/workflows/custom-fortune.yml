@@ -1,0 +1,61 @@
+name: 맞춤 운세 요청
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: '이름 (선택)'
+        required: false
+        default: ''
+      birth_date:
+        description: '생년월일 (YYYY-MM-DD, 예: 1990-03-15)'
+        required: true
+      birth_hour:
+        description: '생시 - 태어난 시간 0~23 (예: 오전 10시 = 10)'
+        required: true
+        default: '12'
+      yongsin:
+        description: '용신 오행 (토/금/수/목/화)'
+        required: true
+        default: '토'
+      huisin:
+        description: '희신 오행 (선택)'
+        required: false
+        default: ''
+      gisin:
+        description: '기신 오행 (토/금/수/목/화)'
+        required: true
+        default: '화'
+
+permissions:
+  contents: write
+
+jobs:
+  request:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 사주 데이터 산출
+        run: |
+          python3 custom_fortune.py \
+            --birth-date "${{ github.event.inputs.birth_date }}" \
+            --birth-hour "${{ github.event.inputs.birth_hour }}" \
+            --yongsin "${{ github.event.inputs.yongsin }}" \
+            --huisin "${{ github.event.inputs.huisin }}" \
+            --gisin "${{ github.event.inputs.gisin }}" \
+            --name "${{ github.event.inputs.name }}" \
+            > /tmp/custom_data.json
+          cat /tmp/custom_data.json
+      - name: 요청 파일 저장 및 커밋
+        run: |
+          mkdir -p requests
+          cp /tmp/custom_data.json requests/pending.json
+          git config user.email "fortune-bot@auto"
+          git config user.name "Fortune Bot"
+          git add requests/pending.json
+          git commit -m "맞춤 운세 요청: ${{ github.event.inputs.name || '익명' }} (${{ github.event.inputs.birth_date }})"
+          git push
+          echo "✅ 요청 완료. 다음 Claude 세션 실행 시 카카오톡으로 발송됩니다."
