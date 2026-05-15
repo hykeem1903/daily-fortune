@@ -93,17 +93,80 @@ SAMHYUNG = {"寅":"巳","巳":"申","申":"寅","丑":"戌","戌":"未","未":"�
 CK_HAP   = {("丙","辛"):("水","合水"),("辛","丙"):("水","合水"),("甲","己"):("土","合土"),("己","甲"):("土","合土"),("乙","庚"):("金","合金"),("庚","乙"):("金","合金"),("丁","壬"):("木","合木"),("壬","丁"):("木","合木"),("戊","癸"):("火","合火"),("癸","戊"):("火","合火")}
 CK_CHUNG = {"甲":"庚","庚":"甲","乙":"辛","辛":"乙","丙":"壬","壬":"丙","丁":"癸","癸":"丁"}
 
-def calc_custom(birth_date: date, birth_hour: int, yongsin: str, huisin: str, gisin: str, name: str = ""):
+SAENG_NEXT = {"木":"火","火":"土","土":"金","金":"水","水":"木"}
+GUK_NEXT   = {"木":"土","土":"水","水":"火","火":"金","金":"木"}
+SAENG_PREV = {v:k for k,v in SAENG_NEXT.items()}
+GUK_PREV   = {v:k for k,v in GUK_NEXT.items()}
+
+
+def auto_yongsin(ilgan: str, stems: list, branches: list):
+    """4기둥(또는 시주 결손 시 3기둥)으로 용신/희신/기신 간이 산정.
+
+    오행 분포 카운트 → 신강/신약 → 용신 결정.
+    월지는 영향력이 크니 ×2 가중.
+    """
+    ilgan_oh = STEM_OH.get(ilgan, "土")
+    counts = {"木":0, "火":0, "土":0, "金":0, "水":0}
+    for s in stems:
+        if s in STEM_OH: counts[STEM_OH[s]] += 1
+    for i, b in enumerate(branches):
+        if b not in BRANCH_OH: continue
+        weight = 2 if i in (1, 2) else 1
+        counts[BRANCH_OH[b]] += weight
+
+    bigyeop  = ilgan_oh
+    insung   = SAENG_PREV[ilgan_oh]
+    siksang  = SAENG_NEXT[ilgan_oh]
+    jaesung  = GUK_NEXT[ilgan_oh]
+    gwansung = GUK_PREV[ilgan_oh]
+
+    friendly = counts[bigyeop] + counts[insung]
+    hostile  = counts[siksang] + counts[jaesung] + counts[gwansung]
+
+    if friendly > hostile:
+        if counts[siksang] <= counts[jaesung]:
+            ys, hs = siksang, jaesung
+        else:
+            ys, hs = jaesung, siksang
+        gs = insung
+        sinkang = True
+    else:
+        if counts[insung] <= counts[bigyeop]:
+            ys, hs = insung, bigyeop
+        else:
+            ys, hs = bigyeop, insung
+        gs = gwansung
+        sinkang = False
+
+    return {
+        "용신": OH_KR[ys], "희신": OH_KR[hs], "기신": OH_KR[gs],
+        "오행분포": {OH_KR[k]: v for k, v in counts.items()},
+        "친화_점수": friendly, "적대_점수": hostile,
+        "체질": "신강(身强)" if sinkang else "신약(身弱)",
+    }
+
+
+def calc_custom(birth_date: date, birth_hour, name: str = ""):
     today = datetime.now(KST).date()
     ys, yb = year_ganzhi(birth_date.year)
     ms, mb = month_ganzhi(ys, birth_date.month)
     di, ds, db, ds_kr, db_kr = get_ganzhi(birth_date)
-    ts, tb = time_ganzhi(ds, birth_hour)
+    has_hour = birth_hour is not None
+    if has_hour:
+        ts, tb = time_ganzhi(ds, birth_hour)
+        wonkuk_b = [yb, mb, db, tb]
+        wonkuk_s = [ys, ms, ds, ts]
+    else:
+        ts, tb = "", ""
+        wonkuk_b = [yb, mb, db]
+        wonkuk_s = [ys, ms, ds]
     gongmang = get_gongmang(di)
-    wonkuk_b = [yb, mb, db, tb]
-    wonkuk_s = [ys, ms, ds, ts]
     bc = {}
     for b in wonkuk_b: bc[b] = bc.get(b, 0) + 1
+
+    auto = auto_yongsin(ds, wonkuk_s, wonkuk_b)
+    yongsin = auto["용신"]; huisin = auto["희신"]; gisin = auto["기신"]
+
     ti2, ts2, tb2, ts2_kr, tb2_kr = get_ganzhi(today)
     woon12  = WOON12_TABLE.get(ds, {}).get(tb2, "?")
     w12_lv  = WOON12_LEVEL.get(woon12, 5)
@@ -145,8 +208,11 @@ def calc_custom(birth_date: date, birth_hour: int, yongsin: str, huisin: str, gi
         elif t == "해(害)": ev_sc -= 0.5
         elif t == "합(合)": ev_sc += 0.3
     energy = round(max(1.0, min(10.0, base + s_sc + b_sc + ev_sc)), 1)
-    return {"name":name,"birth_date":str(birth_date),"birth_hour":birth_hour,"today":str(today),
-            "월운":{"년주":f"{ys}{yb}","월주":f"{ms}{mb}","일주":f"{ds}{db}","시주":f"{ts}{tb}","일간":ds,"일지":db,"공망":list(gongmang)},
+    return {"name":name,"birth_date":str(birth_date),"birth_hour":birth_hour if has_hour else None,
+            "생시_입력여부": has_hour,
+            "today":str(today),
+            "원국":{"년주":f"{ys}{yb}","월주":f"{ms}{mb}","일주":f"{ds}{db}","시주":f"{ts}{tb}" if has_hour else "(미입력)","일간":ds,"일지":db,"공망":list(gongmang)},
+            "자동산정":auto,
             "용신":yongsin,"희신":huisin,"기신":gisin,
             "오늘_일진":f"{ts2}{tb2}({ts2_kr}{tb2_kr})","12운성":woon12,"12운성_레벨":w12_lv,
             "에너지_총점":energy,"공망_발동":today_gm,
@@ -155,9 +221,10 @@ def calc_custom(birth_date: date, birth_hour: int, yongsin: str, huisin: str, gi
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--birth-date", required=True); p.add_argument("--birth-hour", type=int, default=12)
-    p.add_argument("--yongsin", required=True); p.add_argument("--huisin", default="")
-    p.add_argument("--gisin", required=True); p.add_argument("--name", default="")
+    p.add_argument("--birth-date", required=True)
+    p.add_argument("--birth-hour", default="")
+    p.add_argument("--name", default="")
     args = p.parse_args()
-    result = calc_custom(date.fromisoformat(args.birth_date), args.birth_hour, args.yongsin, args.huisin, args.gisin, args.name)
+    bh = int(args.birth_hour) if args.birth_hour.strip() else None
+    result = calc_custom(date.fromisoformat(args.birth_date), bh, args.name)
     print(json.dumps(result, ensure_ascii=False, indent=2))

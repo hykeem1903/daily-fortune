@@ -6,9 +6,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        ⚠️ 이 폼은 운세 페이지의 입력 섹션에서 자동으로 채워집니다. 수동으로 작성할 경우 모든 항목을 정확히 입력해야 합니다.
+        이 폼은 운세 페이지의 입력 섹션에서 자동으로 채워집니다. 수동으로 작성할 경우 생년월일은 반드시 입력해야 합니다.
 
-        제출 후 처리 완료까지 1~2분 정도 소요되며, 결과는 다음 운세 발송 시 카카오톡으로 전달됩니다.
+        용신·희신·기신은 사주 분포 기반으로 **자동 계산**됩니다.
+
+        결과는 다음 운세 발송 시 카카오톡으로 전달됩니다 (1~2분 후 이슈가 자동으로 닫힙니다).
   - type: input
     id: name
     attributes:
@@ -28,46 +30,8 @@ body:
   - type: input
     id: birth_hour
     attributes:
-      label: 생시
-      description: 0~23 사이 숫자 (오전 10시 = 10, 밤 11시 = 23)
-      placeholder: "12"
-    validations:
-      required: true
-  - type: dropdown
-    id: yongsin
-    attributes:
-      label: 용신 (가장 도움되는 오행)
-      options:
-        - 토
-        - 금
-        - 수
-        - 목
-        - 화
-    validations:
-      required: true
-  - type: dropdown
-    id: huisin
-    attributes:
-      label: 희신 (보조 오행)
-      description: 모르거나 없으면 "없음"
-      options:
-        - 없음
-        - 토
-        - 금
-        - 수
-        - 목
-        - 화
+      label: 생시 (선택)
+      description: 0~23 사이 숫자. 모르면 비워두세요 (시주 없이 계산).
+      placeholder: "10"
     validations:
       required: false
-  - type: dropdown
-    id: gisin
-    attributes:
-      label: 기신 (가장 해로운 오행)
-      options:
-        - 화
-        - 목
-        - 수
-        - 금
-        - 토
-    validations:
-      required: true
