@@ -2,7 +2,7 @@
 
 ## 역할
 명리학 전문 해설사로서 아래 단계를 순서대로 실행하고,
-결과를 `output/today.txt` 로 저장한 뒤 git commit & push 하라.
+결과를 `output/today.txt` 로 저장한 뒤 카카오톡 전송 → git commit & push 하라.
 
 ---
 
@@ -121,9 +121,21 @@ python3 fortune_calc.py $(TZ='Asia/Seoul' date -d 'tomorrow' +%Y-%m-%d)  # 내�
 
 ---
 
-## STEP 3: 저장 및 푸시
+## STEP 3: 카카오톡 전송 및 저장·푸시
+
+### 3-1. output/today.txt 저장
 ```bash
 mkdir -p output
+```
+위 명령 후 output/today.txt 에 STEP 2에서 작성한 운세 전문을 저장한다.
+
+### 3-2. 카카오톡 분할 전송
+`mcp__PlayMCP__KakaotalkChat-MemoChat` 도구를 사용하여 output/today.txt 의 내용을 전송한다.
+이 도구는 한 번에 최대 200자까지 지원하므로, 내용을 200자 단위로 분할하여 순서대로 여러 번 호출한다.
+분할 기준: 가능하면 줄바꿈(\n) 경계를 기준으로 자르되, 한 덩어리가 200자를 초과하지 않도록 한다.
+
+### 3-3. git commit & push
+```bash
 git config user.email "fortune-bot@auto"
 git config user.name "Fortune Bot"
 git add output/today.txt
