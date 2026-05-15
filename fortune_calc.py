@@ -157,6 +157,41 @@ ENERGY_JUDGE = {
 YONGSIN_BRANCHES = ["丑","辰","未","戌","申","酉"]
 GISIN_BRANCHES   = ["巳","午","寅","卯"]
 
+# 신살 (일간 辛 / 일지 未 기준)
+JAHYUNG_SET = {"辰","午","酉","亥"}
+SINSAL_RULES = {
+    "천을귀인": {"寅","午"},   # 辛 일간
+    "문창귀인": {"子"},
+    "양인":    {"戌"},
+    "도화":    {"子"},        # 일지 未 (亥卯未) → 도화 = 子
+    "역마":    {"巳"},
+    "화개":    {"未"},
+}
+SINSAL_DESC = {
+    "천을귀인":"매우 길 — 대인관계·도움·구원자",
+    "문창귀인":"학습·문서·시험·기획",
+    "양인":   "강한 행동력·갈등·결단",
+    "도화":   "이성·매력·인기",
+    "역마":   "이동·변화·여행",
+    "화개":   "고독·예술·종교·집중",
+}
+
+# 방국·삼합 그룹 (오행 강화 detection)
+SAMHAP_OH_GROUPS = [
+    ({"亥","卯","未"}, "목국(木局)", "목"),
+    ({"寅","午","戌"}, "화국(火局)", "화"),
+    ({"巳","酉","丑"}, "금국(金局)", "금"),
+    ({"申","子","辰"}, "수국(水局)", "수"),
+]
+BANG_OH_GROUPS = [
+    ({"寅","卯","辰"}, "목방(木方)", "목"),
+    ({"巳","午","未"}, "화방(火方)", "화"),
+    ({"申","酉","戌"}, "금방(金方)", "금"),
+    ({"亥","子","丑"}, "수방(水方)", "수"),
+]
+
+GYEOKGUK = "편재격(역동·기획·창업) — 월지 卯 = 편재"
+
 
 def _cross_events(b: str, s: str, target_b: str, target_s: str, layer: str) -> list:
     evts = []
@@ -236,6 +271,30 @@ def calc(today: date = None):
                                 "ow_ss":SIPSONG.get(ow_s,"?"),"note":"천간 직접 충돌"})
     seun_events    = _cross_events(b, s, SEUN_2026["branch"],       SEUN_2026["stem"],       "세운")
     daewoon_events = _cross_events(b, s, DAEWOON_CURRENT["branch"], DAEWOON_CURRENT["stem"], "대운")
+    # 자형 (일진 지지가 自刑 글자이고 원국에 같은 글자 있음)
+    if b in JAHYUNG_SET and b in WONKUK_BRANCH:
+        events.append({"type":"형(刑)","pair":f"{b}×{b}","ow_ss":SIPSONG.get(b,"?"),"강도":1,"note":"자형(自刑)·내적 갈등"})
+    # 신살 발동
+    sinsal_active = [
+        f"{name}({SINSAL_DESC[name]})"
+        for name, branches in SINSAL_RULES.items() if b in branches
+    ]
+    # 방국·삼합 형성 (원국 + 일진)
+    all_b_full = list(WONKUK_BRANCH) + [b]
+    bset = set(all_b_full)
+    groups_formed = []
+    for grp, gname, oh in SAMHAP_OH_GROUPS + BANG_OH_GROUPS:
+        inter = grp & bset
+        if len(inter) >= 2 and b in inter:
+            comp = "완성" if len(inter) == 3 else "부분"
+            groups_formed.append({"이름":gname,"오행":oh,"상태":comp,"강화":2 if comp=="완성" else 1})
+
+    # 천간 충 일간 직격 강도 가중
+    for e in stem_events:
+        if e["type"] == "충(沖)" and e["pair"].startswith(s):
+            e["강도"] = 1.5
+            e["일간직격"] = True
+
     gongmang_note = (
         f"{b}(일진 지지)는 공망 — 충합해 효력 반감, 기회가 잡히지 않는 날"
         if is_gongmang else ""
@@ -253,6 +312,15 @@ def calc(today: date = None):
         elif t == "형(刑)": ev_sc -= 0.8
         elif t == "해(害)": ev_sc -= 0.5
         elif t == "합(合)": ev_sc += 0.3
+    # 화국 등 형성 시 기신/용신 가중
+    for g in groups_formed:
+        boost = g["강화"] * 0.4
+        if g["오행"] == "화":  ev_sc -= boost   # 기신 강화
+        if g["오행"] in ("토","금"): ev_sc += boost  # 용신/희신 강화
+    # 신살 보정
+    if any("천을귀인" in s_ for s_ in sinsal_active): ev_sc += 0.6
+    if any("문창귀인" in s_ for s_ in sinsal_active): ev_sc += 0.3
+    if any("양인"    in s_ for s_ in sinsal_active): ev_sc -= 0.3
     energy_score = round(max(1.0, min(10.0, base + s_sc + b_sc + ev_sc)), 1)
     ilji_hour   = BRANCH_HOUR_STR.get(b, "?")
     best_hours  = [BRANCH_HOUR_STR[br] for br in YONGSIN_BRANCHES]
@@ -277,6 +345,9 @@ def calc(today: date = None):
         "세운_교차":       seun_events,
         "대운_교차":       daewoon_events,
         "삼합완성":        samhap_complete,
+        "방국삼합형성":    groups_formed,
+        "신살_발동":       sinsal_active,
+        "격국":            GYEOKGUK,
         "월운": {"interval":f"{ws}{wb}","천간십성":wol_stem_ss,"지지십성":wol_branch_ss},
         "세운_notes":      SEUN_2026["notes"],
         "대운":            DAEWOON_CURRENT,

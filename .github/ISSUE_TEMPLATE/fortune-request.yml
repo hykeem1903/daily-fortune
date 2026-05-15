@@ -8,9 +8,13 @@ body:
       value: |
         이 폼은 운세 페이지의 입력 섹션에서 자동으로 채워집니다. 수동으로 작성할 경우 생년월일은 반드시 입력해야 합니다.
 
-        용신·희신·기신은 사주 분포 기반으로 **자동 계산**됩니다.
+        **자동 처리 항목:**
+        - 용신·희신·기신: 사주 분포 기반 자동 산정
+        - 진태양시: 출생지 경도로 보정 (예: 서울 -32분)
+        - 서머타임: 1948~1988 한국 DST 기간 자동 감지
+        - 24절기: 양력 → 절기 기준 월주 계산
 
-        결과는 다음 운세 발송 시 카카오톡으로 전달됩니다 (1~2분 후 이슈가 자동으로 닫힙니다).
+        결과는 다음 운세 발송 시 카카오톡으로 전달됩니다 (이슈 자동 닫힘).
   - type: input
     id: name
     attributes:
@@ -31,7 +35,40 @@ body:
     id: birth_hour
     attributes:
       label: 생시 (선택)
-      description: 0~23 사이 숫자. 모르면 비워두세요 (시주 없이 계산).
-      placeholder: "10"
+      description: 0~23 사이 숫자. 모르면 비워두기.
+      placeholder: "15"
+    validations:
+      required: false
+  - type: input
+    id: birth_min
+    attributes:
+      label: 생분 (선택)
+      description: 0~59. 시 경계(±15분)면 정확도 차이 큼.
+      placeholder: "48"
+    validations:
+      required: false
+  - type: dropdown
+    id: city
+    attributes:
+      label: 출생지 (진태양시 보정용)
+      description: 도시별 경도 차이로 시(時) 자동 보정. 모르면 서울.
+      default: 0
+      options:
+        - 서울
+        - 부산
+        - 대구
+        - 인천
+        - 광주
+        - 대전
+        - 울산
+        - 세종
+        - 제주
+        - 수원
+        - 춘천
+        - 강릉
+        - 청주
+        - 전주
+        - 포항
+        - 기타
     validations:
       required: false

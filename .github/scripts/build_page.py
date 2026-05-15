@@ -34,11 +34,34 @@ def _form_section() -> str:
     return """
 <div class="custom-form">
 <h2>맞춤 운세 요청</h2>
-<p class="form-note">다른 사람 사주로 운세 받기. 용신·기신은 자동 계산되니 생년월일만 있으면 OK. 제출 시 GitHub 이슈 페이지가 새 탭으로 열려요. 거기서 한 번 더 "Submit"하면 다음 운세 발송 때 카톡으로 결과 전송.</p>
+<p class="form-note">다른 사람 사주로 운세 받기. 용신·기신은 자동 계산. 시·분·출생지까지 알면 진태양시 보정 적용돼서 정확도 올라가. 제출 시 GitHub 이슈 페이지가 새 탭으로 열리고, 한 번 더 "Submit"하면 다음 운세 발송 때 카톡으로 결과 전송.</p>
 <form id="ff">
   <label>이름 (선택)<input type="text" name="name" placeholder="홍길동" maxlength="20"></label>
   <label>생년월일<input type="date" name="birth_date" required></label>
-  <label>생시 (선택 · 모르면 비워두기)<input type="number" name="birth_hour" min="0" max="23" placeholder="0~23"></label>
+  <div class="hm-row">
+    <label class="hm-h">생시 (선택)<input type="number" name="birth_hour" min="0" max="23" placeholder="0~23"></label>
+    <label class="hm-m">생분 (선택)<input type="number" name="birth_min" min="0" max="59" placeholder="0~59"></label>
+  </div>
+  <label>출생지 (진태양시 보정)
+    <select name="city">
+      <option value="서울">서울</option>
+      <option value="부산">부산</option>
+      <option value="대구">대구</option>
+      <option value="인천">인천</option>
+      <option value="광주">광주</option>
+      <option value="대전">대전</option>
+      <option value="울산">울산</option>
+      <option value="세종">세종</option>
+      <option value="제주">제주</option>
+      <option value="수원">수원</option>
+      <option value="춘천">춘천</option>
+      <option value="강릉">강릉</option>
+      <option value="청주">청주</option>
+      <option value="전주">전주</option>
+      <option value="포항">포항</option>
+      <option value="기타">기타</option>
+    </select>
+  </label>
   <button type="submit">운세 요청 →</button>
 </form>
 <script>
@@ -51,7 +74,9 @@ document.getElementById('ff').addEventListener('submit', function(e) {
     title: '[운세] ' + name,
     name: fd.get('name') || '',
     birth_date: fd.get('birth_date'),
-    birth_hour: fd.get('birth_hour') || ''
+    birth_hour: fd.get('birth_hour') || '',
+    birth_min: fd.get('birth_min') || '',
+    city: fd.get('city') || '서울'
   });
   window.open('REPO_URL_PLACEHOLDER/issues/new?' + qs.toString(), '_blank');
 });
@@ -194,6 +219,8 @@ pre {{
   border: 1px solid #d8ceb4;
   border-radius: 5px;
 }}
+.hm-row {{ display: flex; gap: 10px; margin-bottom: 10px; }}
+.hm-row label {{ flex: 1; margin-bottom: 0; }}
 .custom-form button {{
   display: block;
   width: 100%;
