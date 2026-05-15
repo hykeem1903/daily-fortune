@@ -1,0 +1,84 @@
+name: 카카오톡 운세 전송
+
+on:
+  push:
+    paths:
+      - 'output/today.txt'
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 커밋 메시지·날짜 검증
+        id: check
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          TODAY_KST=$(TZ='Asia/Seoul' date +%Y-%m-%d)
+          YESTERDAY_KST=$(TZ='Asia/Seoul' date -d 'yesterday' +%Y-%m-%d)
+          EXPECTED_TODAY="운세: ${TODAY_KST}"
+          EXPECTED_YESTERDAY="운세: ${YESTERDAY_KST}"
+          if [ "$COMMIT_MSG" = "$EXPECTED_TODAY" ] || [ "$COMMIT_MSG" = "$EXPECTED_YESTERDAY" ]; then
+            echo "skip=false" >> $GITHUB_OUTPUT
+          else
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "커밋 메시지 불일치 또는 날짜 오류 — 전송 건너뛰"
+            echo "  기대값(오늘): ${EXPECTED_TODAY}"
+            echo "  기대값(어제): ${EXPECTED_YESTERDAY}"
+            echo "  실제값: ${COMMIT_MSG}"
+          fi
+
+      - name: 카카오 액세스 토큰 갱신 (refresh_token)
+        if: steps.check.outputs.skip == 'false'
+        id: refresh
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+        run: |
+          RESPONSE=$(curl -s -X POST "https://kauth.kakao.com/oauth/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "grant_type=refresh_token" \
+            --data-urlencode "client_id=${KAKAO_REST_API_KEY}" \
+            --data-urlencode "refresh_token=${KAKAO_REFRESH_TOKEN}")
+          ACCESS_TOKEN=$(echo "$RESPONSE" | jq -r '.access_token')
+          if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+            echo "❌ 카카오 토큰 갱신 실패"
+            echo "$RESPONSE"
+            exit 1
+          fi
+          echo "::add-mask::$ACCESS_TOKEN"
+          echo "access_token=$ACCESS_TOKEN" >> $GITHUB_OUTPUT
+          echo "✅ 카카오 액세스 토큰 획득 완료"
+
+      - name: 카카오톡 나에게 보내기 — 분할 전송
+        if: steps.check.outputs.skip == 'false'
+        env:
+          ACCESS_TOKEN: ${{ steps.refresh.outputs.access_token }}
+        run: |
+          TEXT=$(cat output/today.txt)
+          MAX=180
+          LENGTH=${#TEXT}
+          START=0
+          PART=1
+          while [ $START -lt $LENGTH ]; do
+            CHUNK="${TEXT:$START:$MAX}"
+            TEMPLATE=$(jq -nc --arg t "$CHUNK" '{object_type:"text", text:$t, link:{web_url:"https://github.com/hykeem1903/daily-fortune", mobile_web_url:"https://github.com/hykeem1903/daily-fortune"}}')
+            HTTP=$(curl -s -o /tmp/kakao_resp.json -w "%{http_code}" -X POST "https://kapi.kakao.com/v2/api/talk/memo/default/send" \
+              -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+              --data-urlencode "template_object=${TEMPLATE}")
+            if [ "$HTTP" = "200" ]; then
+              echo "✅ 파트 $PART 전송 성공"
+            else
+              echo "❌ 파트 $PART 전송 실패 (HTTP $HTTP)"
+              cat /tmp/kakao_resp.json
+              exit 1
+            fi
+            START=$(( START + MAX ))
+            PART=$(( PART + 1 ))
+            sleep 1
+          done
