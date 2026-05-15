@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'output/today.txt'
+      - '.github/scripts/build_page.py'
+      - '.github/workflows/build-page.yml'
     branches:
       - main
   workflow_dispatch:
@@ -15,15 +17,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 체크아웃
+      - name: 체크아웃 main
         uses: actions/checkout@v4
+
+      - name: 체크아웃 gh-pages (기존 아카이브)
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: existing_site
+        continue-on-error: true
 
       - name: Python 셋업
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: HTML 생성
+      - name: HTML 생성 (30일 보관)
         run: python3 .github/scripts/build_page.py
 
       - name: gh-pages 배포
