@@ -27,12 +27,78 @@ DATE_RE = re.compile(r'^(\d{4}-\d{2}-\d{2})\.html$')
 WEEKDAY_KR = ['월', '화', '수', '목', '금', '토', '일']
 
 
+REPO_URL = 'https://github.com/hykeem1903/daily-fortune'
+
+
+def _form_section() -> str:
+    return """
+<div class="custom-form">
+<h2>맞춤 운세 요청</h2>
+<p class="form-note">다른 사람 사주로 운세 받기. 제출 시 GitHub 이슈 페이지가 새 탭으로 열려요. 거기서 한 번 더 "Submit"하면 다음 운세 발송 때 카톡으로 결과 전송.</p>
+<form id="ff">
+  <label>이름 (선택)<input type="text" name="name" placeholder="홍길동" maxlength="20"></label>
+  <label>생년월일<input type="date" name="birth_date" required></label>
+  <label>생시 (0~23시)<input type="number" name="birth_hour" min="0" max="23" required value="12"></label>
+  <label>용신 (가장 도움되는 오행)
+    <select name="yongsin" required>
+      <option value="토">토(土)</option>
+      <option value="금">금(金)</option>
+      <option value="수">수(水)</option>
+      <option value="목">목(木)</option>
+      <option value="화">화(火)</option>
+    </select>
+  </label>
+  <label>희신 (보조 오행 · 선택)
+    <select name="huisin">
+      <option value="">없음</option>
+      <option value="토">토(土)</option>
+      <option value="금">금(金)</option>
+      <option value="수">수(水)</option>
+      <option value="목">목(木)</option>
+      <option value="화">화(火)</option>
+    </select>
+  </label>
+  <label>기신 (가장 해로운 오행)
+    <select name="gisin" required>
+      <option value="화">화(火)</option>
+      <option value="목">목(木)</option>
+      <option value="수">수(水)</option>
+      <option value="금">금(金)</option>
+      <option value="토">토(土)</option>
+    </select>
+  </label>
+  <button type="submit">운세 요청 →</button>
+</form>
+<script>
+document.getElementById('ff').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var fd = new FormData(e.target);
+  var name = fd.get('name') || '익명';
+  var huisin = fd.get('huisin') || '없음';
+  var qs = new URLSearchParams({
+    template: 'fortune-request.yml',
+    title: '[운세] ' + name,
+    name: fd.get('name') || '',
+    birth_date: fd.get('birth_date'),
+    birth_hour: fd.get('birth_hour'),
+    yongsin: fd.get('yongsin'),
+    huisin: huisin,
+    gisin: fd.get('gisin')
+  });
+  window.open('REPO_URL_PLACEHOLDER/issues/new?' + qs.toString(), '_blank');
+});
+</script>
+</div>""".replace('REPO_URL_PLACEHOLDER', REPO_URL)
+
+
 def render_page(content_raw, date_str, weekday_kr, archive_dates, is_dated_page):
     escaped = html.escape(content_raw)
 
     nav_top = ''
     if is_dated_page:
         nav_top = '<a class="back" href="./">← 오늘 운세 보기</a>'
+
+    form_section = '' if is_dated_page else _form_section()
 
     archive_section = ''
     if archive_dates:
@@ -122,6 +188,58 @@ pre {{
   border-radius: 4px;
 }}
 .archive a:hover {{ background: #f0e8d4; }}
+.custom-form {{
+  margin-top: 36px;
+  padding: 18px 16px 20px;
+  border: 1px solid #e8dfcb;
+  border-radius: 8px;
+  background: #fdfaf3;
+}}
+.custom-form h2 {{
+  font-size: 14px;
+  font-weight: 600;
+  color: #8a7a5a;
+  margin: 0 0 8px;
+  letter-spacing: 0.02em;
+}}
+.form-note {{
+  font-size: 12px;
+  color: #8a7a5a;
+  margin: 0 0 14px;
+  line-height: 1.55;
+}}
+.custom-form label {{
+  display: block;
+  font-size: 13px;
+  color: #6b5e44;
+  margin: 0 0 10px;
+}}
+.custom-form input, .custom-form select {{
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  font-size: 15px;
+  font-family: inherit;
+  color: #2c2c2c;
+  background: #fff;
+  border: 1px solid #d8ceb4;
+  border-radius: 5px;
+}}
+.custom-form button {{
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 11px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: #8a7a5a;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}}
+.custom-form button:hover {{ background: #6f6248; }}
 .footer {{
   margin-top: 48px;
   text-align: center;
@@ -139,6 +257,15 @@ pre {{
   .archive h2 {{ color: #c8b890; }}
   .archive a {{ color: #b8a880; }}
   .archive a:hover {{ background: #2a2520; }}
+  .custom-form {{ background: #221f1a; border-color: #3a352e; }}
+  .custom-form h2 {{ color: #c8b890; }}
+  .form-note {{ color: #a89878; }}
+  .custom-form label {{ color: #b8a880; }}
+  .custom-form input, .custom-form select {{
+    background: #1c1a17; color: #e8e0d0; border-color: #3a352e;
+  }}
+  .custom-form button {{ background: #6f6248; color: #1c1a17; }}
+  .custom-form button:hover {{ background: #8a7a5a; }}
   .footer {{ color: #6b6452; border-top-color: #3a352e; }}
 }}
 </style>
@@ -146,7 +273,7 @@ pre {{
 <body>
 {nav_top}
 <h1>일일운세 · {date_str} ({weekday_kr})</h1>
-<pre>{escaped}</pre>{archive_section}
+<pre>{escaped}</pre>{form_section}{archive_section}
 <div class="footer">매일 KST 07:00 자동 업데이트 · 최근 30일 보관<br><a href="https://github.com/hykeem1903/daily-fortune">github.com/hykeem1903/daily-fortune</a></div>
 </body>
 </html>

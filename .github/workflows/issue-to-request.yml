@@ -1,0 +1,65 @@
+name: 이슈 운세 요청 처리
+
+on:
+  issues:
+    types: [opened, labeled, edited]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  process:
+    if: contains(github.event.issue.labels.*.name, 'fortune-request')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 이슈 본문 파싱 + custom_fortune 실행
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: python3 .github/scripts/parse_issue.py
+
+      - name: requests/pending.json 커밋
+        run: |
+          git config user.email "fortune-bot@auto"
+          git config user.name "Fortune Bot"
+          git add requests/pending.json
+          git commit -m "맞춤 운세 요청 #${{ github.event.issue.number }} (${{ github.event.issue.title }})"
+          git push
+
+      - name: 이슈에 확인 코멘트 + 닫기
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: '✅ 요청 접수됐어. 다음 운세 발송 때 카톡으로 결과 보내줄게.'
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              state: 'closed'
+            });
+
+  fail-notice:
+    if: failure()
+    runs-on: ubuntu-latest
+    needs: process
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: '❌ 요청 처리 실패. Actions 로그를 확인해줘.'
+            });
