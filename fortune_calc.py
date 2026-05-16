@@ -348,7 +348,6 @@ def calc(today: date = None):
         "방국삼합형성":    groups_formed,
         "신살_발동":       sinsal_active,
         "격국":            GYEOKGUK,
-        "월운": {"interval":f"{ws}{wb}","천간십성":wol_stem_ss,"지지십성":wol_branch_ss},
         "세운_notes":      SEUN_2026["notes"],
         "대운":            DAEWOON_CURRENT,
         "월운": {"interval":f"{ws}{wb}","천간십성":wol_stem_ss,"지지십성":wol_branch_ss},
