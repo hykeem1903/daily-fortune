@@ -162,7 +162,7 @@ JAHYUNG_SET = {"辰","午","酉","亥"}
 SINSAL_RULES = {
     "천을귀인": {"寅","午"},   # 辛 일간
     "문창귀인": {"子"},
-    "양인":    {"戌"},
+    "양인":    {"申"},
     "도화":    {"子"},        # 일지 未 (亥卯未) → 도화 = 子
     "역마":    {"巳"},
     "화개":    {"未"},
@@ -203,7 +203,7 @@ def _cross_events(b: str, s: str, target_b: str, target_s: str, layer: str) -> l
         evts.append({"type":"합(合)","pair":f"{b}×{target_b}({layer}지)","ow_ss":tb_ss,"layer":layer})
     if YOOKHAE.get(b) == target_b:
         evts.append({"type":"해(害)","pair":f"{b}×{target_b}({layer}지)","ow_ss":tb_ss,"layer":layer})
-    if SAMHYUNG.get(b) == target_b:
+    if SAMHYUNG.get(b) == target_b or SAMHYUNG.get(target_b) == b:
         evts.append({"type":"형(刑)","pair":f"{b}×{target_b}({layer}지)","ow_ss":tb_ss,"layer":layer})
     key, rkey = (s, target_s), (target_s, s)
     if key in CHUNGKAN_HAP or rkey in CHUNGKAN_HAP:
@@ -247,7 +247,7 @@ def calc(today: date = None):
             if k not in seen_pairs:
                 seen_pairs.add(k)
                 events.append({"type":"해(害)","pair":f"{b}×{ow}","ow_ss":ow_ss,"강도":intensity,"note":"만성 불편·소통 왜곡"})
-        if SAMHYUNG.get(b) == ow:
+        if SAMHYUNG.get(b) == ow or SAMHYUNG.get(ow) == b:
             k = f"형{b}{ow}"
             if k not in seen_pairs:
                 seen_pairs.add(k)
