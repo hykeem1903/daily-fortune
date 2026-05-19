@@ -23,6 +23,35 @@
 
 ---
 
+## STEP 0-A: 오늘 날짜 결정 (★ 절대 우선 — 모든 다른 STEP보다 먼저)
+
+이 작업의 모든 날짜는 한국 표준시(KST) 기준이다.
+**너의 인지하는 '오늘', 시스템 `date` 명령, harness가 주입한 currentDate, training cutoff 추정 — 전부 무시한다.**
+
+(과거 사례: 자동화 환경 currentDate가 UTC로 잡혀서 KST 새벽 7시 발동 시 LLM이 "오늘=어제"로 인지 → 명시적으로 어제 날짜를 fortune_calc.py 인자로 박아 사주 데이터 자체가 어제 걸로 계산됨. 헤더만 수정해도 해결 안 됨, 데이터 출처가 어제이기 때문.)
+
+다음을 **반드시 첫 명령**으로 실행한다. 인자 없이.
+```bash
+python3 fortune_calc.py
+```
+
+fortune_calc.py 내부에 `today_kst() = datetime.now(KST).date()`가 들어있어, 컨테이너/runner의 tz가 UTC든 무엇이든 항상 KST 기준 오늘을 반환한다. 절대 명시적 날짜 인자를 박지 마라.
+
+이 호출 결과 JSON의 `date` 필드(예: `"2026-05-19"`)를 **$TODAY**로 컨텍스트에 들고 있어라. 이 작업 끝까지 헤더·내일 섹션·카톡 메시지·git commit의 모든 날짜는 **$TODAY를 ground truth**로 사용한다.
+
+내일 데이터는 $TODAY+1일을 Python으로 계산해서 명시적으로 박는다:
+```bash
+# YYYY-MM-DD 자리에 $TODAY 값(예: 2026-05-19)을 그대로 박는다.
+python3 fortune_calc.py $(python3 -c "from datetime import date, timedelta; print(date.fromisoformat('YYYY-MM-DD') + timedelta(days=1))")
+```
+`date -d 'tomorrow'`(GNU 전용)는 macOS BSD에서 깨지므로 사용 금지.
+
+### 검증 규칙 (반드시 적용)
+- $TODAY가 너의 인지하는 '오늘'과 다르면 **무조건 $TODAY를 신뢰**한다. 인지로 덮어쓰지 마라.
+- $TODAY와 fortune_calc.py JSON의 `date` 필드가 다르면 그건 도구 버그다. 작업 중단하고 사용자에게 보고.
+
+---
+
 ## STEP 0: 맞춤 운세 요청 확인 (있을 경우에만)
 
 먼저 `requests/pending.json` 파일이 존재하는지 확인한다:
@@ -48,11 +77,13 @@ git push
 ---
 
 ## STEP 1: 데이터 산출
+
+STEP 0-A에서 이미 오늘 데이터를 받았고 $TODAY를 들고 있다. 내일 데이터만 추가로 받는다:
 ```bash
-python3 fortune_calc.py
-python3 fortune_calc.py $(TZ='Asia/Seoul' date -d 'tomorrow' +%Y-%m-%d)
+# YYYY-MM-DD 자리에 $TODAY 값을 그대로 박는다. `date -d 'tomorrow'`(GNU)는 BSD에서 깨지므로 사용 금지.
+python3 fortune_calc.py $(python3 -c "from datetime import date, timedelta; print(date.fromisoformat('YYYY-MM-DD') + timedelta(days=1))")
 ```
-두 JSON 결과를 내부적으로 파싱하여 오늘·내일의 사주 데이터를 모두 획득한다.
+두 JSON 결과(오늘·내일)를 파싱해서 모두 보유. STEP 1 두 번째 호출 JSON의 `date` 필드를 **$TOMORROW**로 들고 있어라.
 
 ---
 
@@ -75,6 +106,9 @@ python3 fortune_calc.py $(TZ='Asia/Seoul' date -d 'tomorrow' +%Y-%m-%d)
 - 마크다운 문법(**, __, ##, >, -)을 절대 사용하지 않는다
 - 섹션 구분은 이모지와 빈 줄만
 - 한자는 반드시 한글 음을 괄호로 병기
+- **헤더 {YYYY-MM-DD}와 {요일}은 $TODAY (STEP 0-A JSON.date) 에서만 추출**. 시스템 date·자체 인지·기존 today.txt 헤더 사용 금지.
+- **내일 섹션 {내일 YYYY-MM-DD}와 {요일}은 $TOMORROW (STEP 1 두 번째 JSON.date) 에서만 추출**.
+- 요일 계산은 Python으로: `python3 -c "from datetime import date; d=date.fromisoformat('YYYY-MM-DD'); print(['월','화','수','목','금','토','일'][d.weekday()]+'요일')"`
 
 ```
 🔮 신미(辛未) 일일운세 — {YYYY-MM-DD} ({요일})
@@ -141,9 +175,10 @@ python3 fortune_calc.py $(TZ='Asia/Seoul' date -d 'tomorrow' +%Y-%m-%d)
 mkdir -p output
 git config user.email "fortune-bot@auto"
 git config user.name "Fortune Bot"
+git checkout main 2>/dev/null || git checkout -B main   # 반드시 main 브랜치 (gh-pages 빌드는 main만 트리거)
 git add output/today.txt
-git commit -m "운세: $(TZ='Asia/Seoul' date +%Y-%m-%d)"
-git push
+git commit -m "운세: $TODAY"   # $TODAY는 STEP 0-A 결과. 시스템 date 사용 금지.
+git push origin main
 ```
 
 ---
@@ -162,6 +197,9 @@ git push
 🍀 {색상}·{방향}·{숫자}
 ▶ https://hykeem1903.github.io/daily-fortune/
 ```
+
+**{M/D}와 {요일}은 $TODAY (STEP 0-A) 에서만 추출**. 자체 인지로 박지 마라.
+`python3 -c "from datetime import date; d=date.fromisoformat('YYYY-MM-DD'); w=['월','화','수','목','금','토','일'][d.weekday()]; print(f'{d.month}/{d.day} ({w})')"` 로 계산.
 
 ---
 
