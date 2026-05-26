@@ -3,7 +3,7 @@ name: 운세 페이지 빌드
 on:
   push:
     paths:
-      - 'output/today.txt'
+      - 'output/**.txt'
       - '.github/scripts/build_page.py'
       - '.github/workflows/build-page.yml'
     branches:
