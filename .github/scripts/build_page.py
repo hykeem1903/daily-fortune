@@ -320,6 +320,26 @@ def main() -> None:
     print(f'_site/index.html, _site/{today_str}.html 생성 완료')
     print(f'아카이브 명수: {len(archive_sorted)}일')
 
+    # ── 맞춤 운세 페이지 처리 (output/YYYY-MM-DD-<slug>.txt) ──
+    CUSTOM_RE = re.compile(r'^(\d{4}-\d{2}-\d{2})-([^.]+)\.txt$')
+    for cf in Path('output').glob('*.txt'):
+        if cf.name == 'today.txt':
+            continue
+        m = CUSTOM_RE.match(cf.name)
+        if not m:
+            continue
+        d_str = m.group(1)
+        slug = m.group(2)
+        try:
+            d = datetime.date.fromisoformat(d_str)
+        except ValueError:
+            continue
+        wk = WEEKDAY_KR[d.weekday()]
+        raw = cf.read_text(encoding='utf-8')
+        html_out = render_page(raw, d_str, wk, archive_dates=None, is_dated_page=True)
+        (SITE_DIR / f'{d_str}-{slug}.html').write_text(html_out, encoding='utf-8')
+        print(f'_site/{d_str}-{slug}.html 생성 완료')
+
 
 if __name__ == '__main__':
     main()
