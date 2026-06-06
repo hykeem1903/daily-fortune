@@ -1,0 +1,69 @@
+name: 발송 검증 게이트
+
+# 원격 루틴이 output/today.txt를 push하는 "그 순간" 자동 실행 (맥 상태 무관, 발송 직후 확실)
+on:
+  push:
+    paths:
+      - 'output/today.txt'
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 발송물 검증 (날짜·필드·포맷·코드무결성)
+        run: |
+          set -uo pipefail
+          TODAY=$(TZ='Asia/Seoul' date +%F)          # runner를 KST로 — 발송 시점 = push 시점
+          HDR=$(head -1 output/today.txt | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || echo '?')
+          FAIL=""
+
+          # 1) 날짜: 헤더 == 오늘 KST (어제 날짜 발송 재발 차단 — 최우선)
+          [ "$HDR" != "$TODAY" ] && FAIL="${FAIL} [날짜 $HDR≠$TODAY]"
+
+          # 2) 일진 정합: 만세력 계산값의 한자 두 글자가 본문 일진줄에 있는가 (LLM 창작 차단)
+          EXP=$(python3 fortune_calc.py "$TODAY" | python3 -c "import json,sys;print(json.load(sys.stdin)['일진'])")
+          C1=$(echo "$EXP" | cut -c1); C2=$(echo "$EXP" | cut -c2)
+          ILINE=$(grep -E '^일진' output/today.txt || echo '')
+          { echo "$ILINE" | grep -q "$C1" && echo "$ILINE" | grep -q "$C2"; } || FAIL="${FAIL} [일진불일치 기대=$EXP]"
+
+          # 3) 새 필드 본문 반영 (구버전 프롬프트 차단)
+          grep -q "이달흐름" output/today.txt || FAIL="${FAIL} [이달흐름 누락]"
+
+          # 4) 마크다운 오염 차단
+          grep -qE '^\*\*|^##|^> ' output/today.txt && FAIL="${FAIL} [마크다운 오염]"
+
+          # 5) 코드 무결성: fortune_calc가 새 필드 산출하는가 (구버전 코드 차단)
+          python3 fortune_calc.py "$TODAY" | python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if all(k in d for k in ['월운','원국_충합','신체_주의']) else 1)" || FAIL="${FAIL} [코드 구버전]"
+
+          if [ -n "$FAIL" ]; then
+            echo "::error::발송 검증 실패 —$FAIL"
+            echo "FAILMSG=$FAIL" >> "$GITHUB_ENV"
+            exit 1
+          fi
+          echo "✅ 발송 검증 통과: $TODAY $EXP"
+
+      - name: 실패 시 GitHub 이슈 생성 (이메일 자동 알림)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const today = new Date().toLocaleDateString('sv', {timeZone:'Asia/Seoul'});
+            const msg = process.env.FAILMSG || '검증 실패';
+            github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title: `⚠️ 운세 발송 검증 실패 — ${today}`,
+              body: `자동 검증이 실패했습니다 (발송 직후 게이트).\n\n**실패 사유:**${msg}\n\n워크플로우: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\noutput/today.txt를 확인하세요. 어제 날짜 발송이면 SCHEDULE_PROMPT STEP 0-A 점검 필요.`,
+              labels: ['발송오류']
+            });
