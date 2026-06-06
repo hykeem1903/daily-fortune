@@ -5,7 +5,7 @@
 """
 
 from datetime import date, timedelta, datetime, timezone
-import json, sys
+import json, sys, math
 
 KST = timezone(timedelta(hours=9))
 
@@ -49,9 +49,9 @@ WOON12 = {
     "辰":"묘","卯":"절","寅":"태","丑":"양",
 }
 WOON12_LEVEL = {
-    "장생":7,"목욕":5,"관대":8,"건록":9,
+    "장생":7,"목욕":4,"관대":8,"건록":9,
     "제왕":10,"쇠":4,"병":3,"사":2,
-    "묘":4,"절":1,"태":6,"양":7,
+    "묘":3,"절":1,"태":5,"양":6,
 }
 
 GONGMANG = {"戌","亥"}
@@ -109,29 +109,74 @@ DAEWOON_CURRENT = {
     "period": "2023~2032",
 }
 
-JEOLGI_WOLUN_2026 = [
-    (date(2026,  1,  5), "辛", "丑"),
-    (date(2026,  2,  4), "庚", "寅"),
-    (date(2026,  3,  6), "辛", "卯"),
-    (date(2026,  4,  5), "壬", "辰"),
-    (date(2026,  5,  5), "癸", "巳"),
-    (date(2026,  6,  6), "甲", "午"),
-    (date(2026,  7,  7), "乙", "未"),
-    (date(2026,  8,  7), "丙", "申"),
-    (date(2026,  9,  8), "丁", "酉"),
-    (date(2026, 10,  8), "戊", "戌"),
-    (date(2026, 11,  7), "己", "亥"),
-    (date(2026, 12,  7), "庚", "子"),
-]
+# 월운(월주)은 절기 천문계산으로 산출 → get_wolun() 참조 (연도 하드코딩 테이블 제거, 연도무관)
+
+# ── 절기 천문계산 (연도무관, Jean Meeus 태양황경 저차 알고리즘) ──
+_J2000 = 2451545.0
+def _julian_day(dt: datetime) -> float:
+    y, m = dt.year, dt.month
+    d = dt.day + dt.hour/24 + dt.minute/1440 + dt.second/86400
+    if m <= 2: y -= 1; m += 12
+    a = y // 100; b = 2 - a + a // 4
+    return math.floor(365.25*(y+4716)) + math.floor(30.6001*(m+1)) + d + b - 1524.5
+
+def _sun_longitude(jd_tt: float) -> float:
+    T = (jd_tt - _J2000) / 36525.0
+    L0 = (280.46646 + 36000.76983*T + 0.0003032*T*T) % 360
+    M = math.radians((357.52911 + 35999.05029*T - 0.0001537*T*T) % 360)
+    C = ((1.914602 - 0.004817*T - 0.000014*T*T)*math.sin(M)
+         + (0.019993 - 0.000101*T)*math.sin(2*M) + 0.000289*math.sin(3*M))
+    omega = math.radians(125.04 - 1934.136*T)
+    return (L0 + C - 0.00569 - 0.00478*math.sin(omega)) % 360
+
+def _delta_t(year: int) -> float:
+    t = year - 2000
+    return 62.92 + 0.32217*t + 0.005589*t*t
+
+def solar_term_date(year: int, target_deg: float, guess_month: int) -> date:
+    """태양 겉보기황경이 target_deg(°) 도달하는 KST 날짜. 이분탐색 60회(<1초 수렴)."""
+    lo = datetime(year, guess_month, 1) - timedelta(days=20)
+    hi = lo + timedelta(days=40)
+    dT = _delta_t(year)
+    def diff(d):
+        return (_sun_longitude(_julian_day(d) + dT/86400.0) - target_deg + 180) % 360 - 180
+    for _ in range(60):
+        mid = lo + (hi - lo) / 2
+        if diff(lo) * diff(mid) <= 0: hi = mid
+        else: lo = mid
+    return (lo + (hi - lo)/2 + timedelta(hours=9)).date()
+
+# 12절(節) 황경 → 월지 (소한 285°=丑 1월 시작). 오호둔 월간두
+_TIGER_HEAD = {"甲":"丙","己":"丙","乙":"戊","庚":"戊","丙":"庚",
+               "辛":"庚","丁":"壬","壬":"壬","戊":"甲","癸":"甲"}
+_MONTH_BR = ["寅","卯","辰","巳","午","未","申","酉","戌","亥","子","丑"]
+_JEOL = [(285,"丑",1),(315,"寅",2),(345,"卯",3),(15,"辰",4),(45,"巳",5),
+         (75,"午",6),(105,"未",7),(135,"申",8),(165,"酉",9),(195,"戌",10),
+         (225,"亥",11),(255,"子",12)]
 
 def get_wolun(today: date):
-    s, b = "庚", "子"
-    for jd, js, jb in JEOLGI_WOLUN_2026:
-        if today >= jd:
-            s, b = js, jb
-        else:
-            break
-    return s, b
+    """절기 천문계산으로 월주(월간·월지) 산출 — 연도무관. (오호둔: 연간→월간)"""
+    year = today.year
+    cands = [(solar_term_date(year, deg, mo), br) for deg, br, mo in _JEOL]
+    cands.append((solar_term_date(year-1, 255, 12), "子"))  # 전년 대설(1월초 경계)
+    cands.sort()
+    cur_br = cands[0][1]
+    for d, br in cands:
+        if today >= d: cur_br = br
+        else: break
+    # 연주(입춘 315° 경계)로 월간두 결정
+    ipchun = solar_term_date(year, 315, 2)
+    eff_year = year if today >= ipchun else year - 1
+    year_stem = STEMS[(eff_year - 4) % 10]
+    head = _TIGER_HEAD[year_stem]
+    month_stem = STEMS[(STEMS.index(head) + _MONTH_BR.index(cur_br)) % 10]
+    return month_stem, cur_br
+
+def get_seun(today: date):
+    """세운(연주) — 입춘(315°) 경계 천문계산. 입춘 전이면 전년."""
+    ipchun = solar_term_date(today.year, 315, 2)
+    ey = today.year if today >= ipchun else today.year - 1
+    return STEMS[(ey-4)%10], BRANCH[(ey-4)%12]
 
 BRANCH_HOUR_STR = {
     "子": "23~01시", "丑": "01~03시", "寅": "03~05시", "卯": "05~07시",
@@ -162,7 +207,7 @@ JAHYUNG_SET = {"辰","午","酉","亥"}
 SINSAL_RULES = {
     "천을귀인": {"寅","午"},   # 辛 일간
     "문창귀인": {"子"},
-    "양인":    {"申"},
+    # 양인 삭제: 삼명통회 "五陰干無刃" — 辛(음간)은 양인 없음. 申은 辛의 제왕+겁재(신약 용신)이지 양인 아님
     "도화":    {"子"},        # 일지 未 (亥卯未) → 도화 = 子
     "역마":    {"巳"},
     "화개":    {"未"},
@@ -170,7 +215,6 @@ SINSAL_RULES = {
 SINSAL_DESC = {
     "천을귀인":"매우 길 — 대인관계·도움·구원자",
     "문창귀인":"학습·문서·시험·기획",
-    "양인":   "강한 행동력·갈등·결단",
     "도화":   "이성·매력·인기",
     "역마":   "이동·변화·여행",
     "화개":   "고독·예술·종교·집중",
@@ -191,6 +235,31 @@ BANG_OH_GROUPS = [
 ]
 
 GYEOKGUK = "편재격(역동·기획·창업) — 월지 卯 = 편재"
+
+# 월운 십성 → 인생영역 매핑 (거시 방향 도출용)
+SIPSONG_DOMAIN = {
+    "정관":"직장·명예·승진·책임", "편관":"압박·도전·경쟁·권한",
+    "정재":"안정수입·저축·실속",   "편재":"유동재물·투자·사업기회",
+    "식신":"표현·창작·먹을복·루틴", "상관":"재능발산·구설·이직충동",
+    "정인":"학업·자격·문서·휴식",   "편인":"전문기술·재충전·고독",
+    "비견":"독립·동료·협업·자존",   "겁재":"경쟁·지출·동업위험",
+}
+
+# 오행 → 신체 부위 (신금 일간 기본 = 폐·호흡기·피부. 그날 기신/구신 오행이 강하면 추가 경고)
+OHAENG_BODY = {
+    "금":"폐·호흡기·피부·대장", "화":"심장·혈압·눈·염증",
+    "목":"간·담·신경·근육",    "수":"신장·방광·비뇨·귀",  "토":"비위·소화·피부",
+}
+
+# 신약 신금 십성 기능 점수 (사용자 30년 실경험 후보정: 비겁>인성>식상>0>재성>관성)
+# 실제 평균: 비겁+1.75 인성+1.0 식상+0.83 재성-1.0 관성-1.4 와 정합
+SIPSONG_FUNC = {
+    "비견":1.6, "겁재":1.5,   # 부조(신약 용신급) — 사업·인맥 길
+    "정인":1.0, "편인":0.9,   # 생조 — 학습·문서·발전
+    "식신":0.7, "상관":0.6,   # 활동·표현 (금전엔 약)
+    "정재":-0.8,"편재":-0.8,  # 재다부담 (건강·관계 소모로 발현)
+    "정관":-1.0,"편관":-1.4,  # 관살 직극 (칠살 최흉) — 직업 압박
+}
 
 
 def _cross_events(b: str, s: str, target_b: str, target_s: str, layer: str) -> list:
@@ -271,6 +340,28 @@ def calc(today: date = None):
                                 "ow_ss":SIPSONG.get(ow_s,"?"),"note":"천간 직접 충돌"})
     seun_events    = _cross_events(b, s, SEUN_2026["branch"],       SEUN_2026["stem"],       "세운")
     daewoon_events = _cross_events(b, s, DAEWOON_CURRENT["branch"], DAEWOON_CURRENT["stem"], "대운")
+    # ── 세운·대운·월운이 원국 8글자를 직접 충합 (유년충·대운충·월충 — 일진보다 큰 흐름) ──
+    #  ★코드가 '일진↔세운'만 봐서 놓쳤던 부분. 올해/이달이 내 원국 뿌리를 흔드는가를 본다.
+    _se_s, _se_b = get_seun(today)
+    won_cross = []
+    for _ln, _ls, _lb in [("세운", _se_s, _se_b),
+                          ("대운", DAEWOON_CURRENT["stem"], DAEWOON_CURRENT["branch"]),
+                          ("월운", ws, wb)]:
+        for _wb in WONKUK_BRANCH:
+            if YOOKCHUNG.get(_lb) == _wb:
+                won_cross.append({"layer":_ln, "type":"충(沖)", "pair":f"{_lb}×{_wb}", "대상":SIPSONG.get(_wb,"?"), "note":f"{_ln}이 원국 {_wb}({SIPSONG.get(_wb)}) 충"})
+            elif YOOKHAP.get(_lb) == _wb:
+                won_cross.append({"layer":_ln, "type":"합(合)", "pair":f"{_lb}×{_wb}", "대상":SIPSONG.get(_wb,"?"), "note":f"{_ln}이 원국 {_wb} 합"})
+        for _wst in WONKUK_STEM:
+            if CHUNGKAN_CHUNG.get(_ls) == _wst:
+                won_cross.append({"layer":_ln, "type":"충(沖)", "pair":f"{_ls}↔{_wst}", "대상":SIPSONG.get(_wst,"?"), "note":f"{_ln} 천간이 원국 {_wst} 충"})
+    # 충 대상이 용신/뿌리(인성·비겁)면 흔들림 흉, 그 외 충은 변동, 합은 안정
+    woncross_sc = 0.0
+    for _e in won_cross:
+        if _e["type"].startswith("충"):
+            woncross_sc -= 0.18 if _e["대상"] in ("정인","편인","비견","겁재") else 0.10
+        else:
+            woncross_sc += 0.05
     # 자형 (일진 지지가 自刑 글자이고 원국에 같은 글자 있음)
     if b in JAHYUNG_SET and b in WONKUK_BRANCH:
         events.append({"type":"형(刑)","pair":f"{b}×{b}","ow_ss":SIPSONG.get(b,"?"),"강도":1,"note":"자형(自刑)·내적 갈등"})
@@ -304,6 +395,13 @@ def calc(today: date = None):
     base = 5.0 + (woon12_level - 5) * 0.3
     s_sc = OHAENG_SCORE.get(s_ohaeng, 0) * 0.4
     b_sc = OHAENG_SCORE.get(ohaeng, 0) * 0.4
+    # 원국 8글자 오행 분포(성향)와의 공명 — 일진 천간·지지 오행이 원국에 많을수록 그 기운 증폭.
+    #  네 원국: 화2(기신)·목2(구신)·금2·수1·토1. → 기신운(화)은 원국 화부담(2)만큼 더 흉,
+    #  희신운(금)은 원국 금받침(2)만큼 더 길, 용신운(토)은 원국에 1개뿐이라 그만큼 작동.
+    #  ★일지/원국 8글자가 다르면 이 분포가 달라져 같은 운(일진·월·세)도 해석이 갈린다 = 통근·공명.
+    _won_oh = [STEM_OHAENG_MAP.get(x,"?") for x in WONKUK_STEM] + [BRANCH_OHAENG_MAP.get(x,"?") for x in WONKUK_BRANCH]
+    tg_sc = (OHAENG_SCORE.get(s_ohaeng,0) * _won_oh.count(s_ohaeng)
+             + OHAENG_SCORE.get(ohaeng,0) * _won_oh.count(ohaeng)) * 0.08
     ev_sc = 0.0
     for e in events + stem_events + seun_events + daewoon_events:
         intensity = e.get("강도", 1)
@@ -317,14 +415,30 @@ def calc(today: date = None):
         boost = g["강화"] * 0.4
         if g["오행"] == "화":  ev_sc -= boost   # 기신 강화
         if g["오행"] in ("토","금"): ev_sc += boost  # 용신/희신 강화
-    # 신살 보정
-    if any("천을귀인" in s_ for s_ in sinsal_active): ev_sc += 0.6
-    if any("문창귀인" in s_ for s_ in sinsal_active): ev_sc += 0.3
-    if any("양인"    in s_ for s_ in sinsal_active): ev_sc -= 0.3
-    energy_score = round(max(1.0, min(10.0, base + s_sc + b_sc + ev_sc)), 1)
+    # 신살 보정 (절댓값 상한 — 충합의 절반 이하: 신살은 색채 보정)
+    if any("천을귀인" in s_ for s_ in sinsal_active): ev_sc += 0.25
+    if any("문창귀인" in s_ for s_ in sinsal_active): ev_sc += 0.15
+    # 양인 申 제거(음간 無양인). 신약 사주: 비겁 일진은 일간 부조 → 가점
+    if ilgan_sipsong == "비견": ev_sc += 0.20
+    elif ilgan_sipsong == "겁재": ev_sc += 0.15
+    energy_score = round(max(1.0, min(10.0, base + s_sc + b_sc + tg_sc + ev_sc + woncross_sc)), 1)
     ilji_hour   = BRANCH_HOUR_STR.get(b, "?")
     best_hours  = [BRANCH_HOUR_STR[br] for br in YONGSIN_BRANCHES]
     worst_hours = [BRANCH_HOUR_STR[br] for br in GISIN_BRANCHES]
+    # 거시 방향 — 월운+세운+대운 십성기능 합산 (후보정: 대운 포함 시 설명력 19%→39%, LOOCV 0.12→0.32)
+    def _lf(ss, bs):  # 천간 0.6 + 지지 0.4 (歲用天元 천간 우위)
+        return 0.6*SIPSONG_FUNC.get(ss,0) + 0.4*SIPSONG_FUNC.get(bs,0)
+    se_s, se_b = get_seun(today)
+    wol_f = _lf(wol_stem_ss, wol_branch_ss)
+    se_f  = _lf(SIPSONG.get(se_s,"?"), SIPSONG.get(se_b,"?"))
+    de_f  = _lf(DAEWOON_CURRENT["십성_천간"], DAEWOON_CURRENT["십성_지지"])
+    macro_raw = round(0.40*wol_f + 0.35*se_f + 0.25*de_f, 2)   # 층위 가중(월/세/대운)
+    macro_tone = "추진월" if macro_raw>=0.5 else "수성월" if macro_raw<=-0.5 else "중립월"
+    wolun_domains = [SIPSONG_DOMAIN.get(wol_stem_ss,""), SIPSONG_DOMAIN.get(wol_branch_ss,"")]
+    # 신체 주의 (신금=폐·피부 기본 + 그날 기신 화/구신 목이 강하면 해당 장부 추가)
+    body_warn = [f"폐·호흡기·피부(신금 기본)"]
+    if "화" in (s_ohaeng, ohaeng): body_warn.append(f"{OHAENG_BODY['화']}(기신 화 발동)")
+    if "목" in (s_ohaeng, ohaeng): body_warn.append(f"{OHAENG_BODY['목']}(구신 목)")
     return {
         "date":            str(today),
         "일진":            f"{s}{b}({s_kr}{b_kr})",
@@ -344,13 +458,16 @@ def calc(today: date = None):
         "천간_합충":       stem_events,
         "세운_교차":       seun_events,
         "대운_교차":       daewoon_events,
+        "원국_충합":       won_cross,
+        "신체_주의":       body_warn,
         "삼합완성":        samhap_complete,
         "방국삼합형성":    groups_formed,
         "신살_발동":       sinsal_active,
         "격국":            GYEOKGUK,
         "세운_notes":      SEUN_2026["notes"],
         "대운":            DAEWOON_CURRENT,
-        "월운": {"interval":f"{ws}{wb}","천간십성":wol_stem_ss,"지지십성":wol_branch_ss},
+        "월운": {"interval":f"{ws}{wb}","천간십성":wol_stem_ss,"지지십성":wol_branch_ss,
+                 "영역":wolun_domains,"거시톤":macro_tone,"거시점수":macro_raw},
         "원국": {"일간":"辛(-金)","일지":"未(-土)=편인","지지":"卯卯未申","천간":"丁癸辛丙","체질":"신약(身弱)","용신":"토(土)","기신":"화(火)"},
     }
 
