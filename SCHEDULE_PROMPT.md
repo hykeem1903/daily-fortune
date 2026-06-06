@@ -64,7 +64,7 @@ ls requests/pending.json 2>/dev/null && echo "exists" || echo "none"
 2. STEP 2와 동일한 강 코치 포맷으로 맞춤 운세를 작성한다
    - 헤더: `🔮 {name} 맞춤 운세 — {today} ({요일})`
    - 해당 인물의 일간·용신·기신 기준으로 에너지·충합해형 해설
-3. 카카오톡으로 요약 발송 (`mcp__PlayMCP__KakaotalkChat-MemoChat`, 단 1회)
+3. 카카오톡으로 요약 발송 (`KakaotalkChat-MemoChat`로 끝나는 MCP를 실행시점에 탐색, 단 1회 — 프리픽스 하드코딩 금지)
 4. 요청 파일 삭제 및 커밋:
 ```bash
 git rm requests/pending.json
