@@ -184,7 +184,11 @@ output/today.txt를 저장·push 하기 전에 다음을 모두 확인한다. �
 4. **포맷**: 마크다운 문법(`**`·`#`·`>`·`-`) 없음, 한자 한글병기됨.
 5. **무결성**: `python3 fortune_calc.py` JSON에 `거시톤`·`원국_충합`·`신체_주의` 필드가 존재(없으면 구버전 코드이니 git pull 재확인 후 중단).
 
-## STEP 3: 저장 및 푸시
+## STEP 3: 저장 및 푸시 (★카톡 성공이 push의 전제 — "push=발송완료"가 성립하도록)
+
+**실행 순서 고정**: ① 먼저 **STEP 4(카카오톡 발송)**를 실행 → ② 응답 "성공적으로 보냈습니다" 확인 → ③ **카톡이 성공한 경우에만** 아래 push 실행.
+카톡 실패(또는 KakaotalkChat-MemoChat 도구 못 찾음)면 **push하지 말고** "발송 중단: 카톡 실패 — push 보류"를 출력하고 종료한다. (과거: push는 됐는데 카톡 누락 → 발송된 줄 오인. push만으로는 발송 완료가 아니다.)
+
 ```bash
 mkdir -p output
 git config user.email "fortune-bot@auto"
@@ -192,7 +196,7 @@ git config user.name "Fortune Bot"
 git checkout main 2>/dev/null || git checkout -B main   # 반드시 main 브랜치 (gh-pages 빌드는 main만 트리거)
 git add output/today.txt
 git commit -m "운세: $TODAY"   # $TODAY는 STEP 0-A 결과. 시스템 date 사용 금지.
-git push origin main
+git push origin main           # ★카톡 성공 확인 후에만 이 줄 실행
 ```
 
 ---
