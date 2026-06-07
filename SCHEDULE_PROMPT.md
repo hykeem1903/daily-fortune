@@ -188,10 +188,18 @@ output/today.txt를 저장·push 하기 전에 다음을 모두 확인한다. �
 
 ## STEP 3: 저장 및 푸시 (★카톡 성공이 push의 전제 — "push=발송완료"가 성립하도록)
 
-**중복 판단 (★today.txt 존재만으로 스킵 절대 금지)**: today.txt가 이미 $TODAY 날짜여도 그것만 보고 "발송 완료"로 단정해 스킵하지 마라. **발송 완료의 유일 기준은 카카오톡 성공**이다. `output/.last_kakao` 파일을 확인하라:
-- 내용 == $TODAY → 오늘 카톡 이미 성공. (today.txt도 정확하면 그때만 스킵 가능)
-- 내용 != $TODAY 또는 파일 없음 → **카톡 미발송 상태**. today.txt가 정확하면 재생성·재커밋 없이 **STEP 4 카톡만 발송**하고 .last_kakao를 $TODAY로 갱신·커밋하라.
-- **수동 실행(검증 목적)은 카톡 발송 경로를 반드시 타야 한다.** today.txt가 있다는 이유로 카톡을 건너뛰지 마라 — 사용자가 카톡 수신을 검증하려는 것이다.
+**발송 완결 판단 (★세션별 추적 — 단순 "오늘 됨/안됨" 이진 금지)**: 발송 완료는 "오늘 날짜로 뭔가 있음"이 아니라 **"이 운세 내용이 커밋과 카톡까지 짝지어 완결됐는가"**다. 발송 시도마다 `output/.send_log`에 한 줄씩 append로 세션 기록을 남긴다(어느 내용을, 언제, 카톡까지 성공했는지):
+
+```
+{today.txt 내용해시 8자} | {KST 시각 YYYY-MM-DD HH:MM} | kakao={ok|fail}
+```
+내용해시 = `python3 -c "import hashlib;print(hashlib.md5(open('output/today.txt','rb').read()).hexdigest()[:8])"`
+
+판단(현재 today.txt 해시를 HASH라 하면):
+- `.send_log`에 **HASH가 `kakao=ok`로 기록돼 있으면** → 이 내용은 카톡까지 완결됨. **재발송 금지.**
+- HASH가 없거나 **`kakao=fail`로만 있으면** → 미완결(커밋은 됐는데 카톡 실패한 경우 포함). **카톡을 발송**하고, 성공 시 `kakao=ok` 줄을 append, 실패 시 `kakao=fail` 줄을 append하고 중단.
+- 정규 발송은 매일 새 today.txt(날짜가 달라 해시가 다름)라 HASH가 .send_log에 없어 **항상 발송**된다.
+- ★어제 사고의 교훈: 원격이 today.txt를 커밋했으나 카톡이 실패(미완결)했는데, 디버깅이 찍은 날짜 플래그 때문에 정규가 "오늘 됨"으로 스킵됐다. **카톡 성공(kakao=ok)이 짝지어진 내용만 완결**로 본다 — 커밋만으로는, 날짜만으로는 완결이 아니다.
 
 **실행 순서 고정**: ① 먼저 **STEP 4(카카오톡 발송)**를 실행 → ② 응답 "성공적으로 보냈습니다" 확인 → ③ **카톡이 성공한 경우에만** 아래 push 실행.
 카톡 실패(또는 KakaotalkChat-MemoChat 도구 못 찾음)면 **push하지 말고** "발송 중단: 카톡 실패 — push 보류"를 출력하고 종료한다. (과거: push는 됐는데 카톡 누락 → 발송된 줄 오인. push만으로는 발송 완료가 아니다.)
@@ -201,8 +209,9 @@ mkdir -p output
 git config user.email "fortune-bot@auto"
 git config user.name "Fortune Bot"
 git checkout main 2>/dev/null || git checkout -B main   # 반드시 main 브랜치 (gh-pages 빌드는 main만 트리거)
-echo "$TODAY" > output/.last_kakao   # ★카톡 성공 기록 (멱등성 판단 기준 — 다음 실행이 이걸로 카톡 완료여부 판단)
-git add output/today.txt output/.last_kakao
+HASH=$(python3 -c "import hashlib;print(hashlib.md5(open('output/today.txt','rb').read()).hexdigest()[:8])")
+echo "$HASH | $(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M') | kakao=ok" >> output/.send_log   # ★카톡 성공 후 세션 완결 기록(해시·시각·상태)
+git add output/today.txt output/.send_log
 git commit -m "운세: $TODAY"   # $TODAY는 STEP 0-A 결과. 시스템 date 사용 금지.
 git push origin main           # ★카톡 성공 확인 후에만 이 줄 실행
 ```
