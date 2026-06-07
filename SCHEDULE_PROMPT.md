@@ -188,20 +188,11 @@ output/today.txt를 저장·push 하기 전에 다음을 모두 확인한다. �
 
 ## STEP 3: 저장 및 푸시 (★카톡 성공이 push의 전제 — "push=발송완료"가 성립하도록)
 
-**발송 완결 판단 (★세션별 추적 — 단순 "오늘 됨/안됨" 이진 금지)**: 발송 완료는 "오늘 날짜로 뭔가 있음"이 아니라 **"이 운세 내용이 커밋과 카톡까지 짝지어 완결됐는가"**다. 발송 시도마다 `output/.send_log`에 한 줄씩 append로 세션 기록을 남긴다(어느 내용을, 언제, 카톡까지 성공했는지):
+**발송은 무조건 수행한다 (★스킵 판단 자체를 하지 마라)**: today.txt나 .send_log가 이미 있어도 **발송을 스킵하지 마라.** 매 실행(자동 정규든, 수동 디버깅이든)은 **무조건 카톡 발송을 수행**한다. **특히 수동 실행은 닥치고 발송한다** — "이미 됐네 / 오늘 기록 있네 / 같은 내용이네" 같은 스킵 판단 일절 금지.
 
-```
-{today.txt 내용해시 8자} | {KST 시각 YYYY-MM-DD HH:MM} | kakao={ok|fail}
-```
-내용해시 = `python3 -c "import hashlib;print(hashlib.md5(open('output/today.txt','rb').read()).hexdigest()[:8])"`
-
-판단 — **"오늘 정규 발송창(아침)에 카톡까지 완결됐나"**를 본다:
-- `.send_log`에서 **오늘($TODAY) 날짜 + 시각이 정규 발송창(06:00~10:00 KST) + `kakao=ok`** 인 줄을 찾는다.
-  - 있으면 → 오늘 아침 정규 발송이 완결됨. **재발송 금지.**
-  - 없으면 → **아직 미완결.** 카톡 발송 후 성공 시 `{HASH} | {NOW} | kakao=ok` append, 실패 시 `kakao=fail` append하고 중단.
-- ★**새벽·낮의 디버깅 발송(정규창 06~10시 밖)은 `kakao=ok`여도 정규 발송을 막지 않는다.** 어제 사고가 정확히 이것: 새벽 04시 디버깅이 발송 기록을 남기자, 07시 정규가 "오늘 됐네"로 스킵 → 아침 카톡 누락. **정규창(아침)의 발송만 정규 완결로 본다.** 6/1~6/6은 매일 07:08~07:11 정상 발송됐다.
-- `kakao=fail`(커밋만 되고 카톡 실패)은 완결이 아니다. 다음 실행이 마저 발송한다.
-- 같은 정규창 안에서의 재시도(같은 트리거)는 위 "오늘+아침창+ok" 조건으로 자연히 1회만 발송된다.
+**완결 기준 = 이번 세션(이번 실행)이 발송까지 끝냈는가**: 발송 완료는 과거 기록이 아니라, **지금 이 실행이 ① 카톡 성공 → ② 커밋 → ③ push 를 모두 끝냈는가**다. 다른 세션이 과거에 보냈든 말든 무관 — **이번 세션이 자기 사이클(커밋+카톡)을 완결**해야 한다. 셋 중 하나라도 못 끝냈으면 이 세션은 미완결이다.
+- 카톡 성공 후 `output/.send_log`에 `{KST 시각} | kakao=ok` 한 줄 append (단순 기록·추적용 — **다음 실행의 스킵 근거로 절대 쓰지 마라**).
+- 카톡 실패 시 `{KST 시각} | kakao=fail` append하고 "발송 미완결: 카톡 실패" 출력 후 중단(push 보류).
 
 **실행 순서 고정**: ① 먼저 **STEP 4(카카오톡 발송)**를 실행 → ② 응답 "성공적으로 보냈습니다" 확인 → ③ **카톡이 성공한 경우에만** 아래 push 실행.
 카톡 실패(또는 KakaotalkChat-MemoChat 도구 못 찾음)면 **push하지 말고** "발송 중단: 카톡 실패 — push 보류"를 출력하고 종료한다. (과거: push는 됐는데 카톡 누락 → 발송된 줄 오인. push만으로는 발송 완료가 아니다.)
@@ -211,8 +202,7 @@ mkdir -p output
 git config user.email "fortune-bot@auto"
 git config user.name "Fortune Bot"
 git checkout main 2>/dev/null || git checkout -B main   # 반드시 main 브랜치 (gh-pages 빌드는 main만 트리거)
-HASH=$(python3 -c "import hashlib;print(hashlib.md5(open('output/today.txt','rb').read()).hexdigest()[:8])")
-echo "$HASH | $(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M') | kakao=ok" >> output/.send_log   # ★카톡 성공 후 세션 완결 기록(해시·시각·상태)
+echo "$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M') | kakao=ok" >> output/.send_log   # 이번 세션 발송 완결 기록(기록용일 뿐 — 스킵 근거 아님)
 git add output/today.txt output/.send_log
 git commit -m "운세: $TODAY"   # $TODAY는 STEP 0-A 결과. 시스템 date 사용 금지.
 git push origin main           # ★카톡 성공 확인 후에만 이 줄 실행
