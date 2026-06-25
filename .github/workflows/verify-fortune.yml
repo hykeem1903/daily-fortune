@@ -32,7 +32,7 @@ jobs:
           # 1) 날짜: 헤더 == 오늘 KST (어제 날짜 발송 재발 차단 — 최우선)
           [ "$HDR" != "$TODAY" ] && FAIL="${FAIL} [날짜 $HDR≠$TODAY]"
 
-          # 2) ★요일: 헤더 (X요일) == 헤더 날짜 실제 요일 (날짜 맞아도 요일 틀린 발송 차단 — 6/25 재발 방지). 단일라인 python (YAML 들여쓰기 IndentationError 회피)
+          # 2) ★요일: 헤더 (X요일) == 헤더 날짜 실제 요일 (날짜 맞아도 요일 틀린 발송 차단 — 6/25 재발 방지). 단일라인 python
           WKCHK=$(python3 -c "import datetime,re,sys; f=open('output/today.txt',encoding='utf-8').read().split(chr(10))[0]; m=re.search(r'(\\d{4}-\\d{2}-\\d{2}).*?\\(([월화수목금토일])요일\\)',f); WK='월화수목금토일'; print('NOWK') if not m else print('OK' if m.group(2)==WK[datetime.date.fromisoformat(m.group(1)).weekday()] else m.group(2)+'!='+WK[datetime.date.fromisoformat(m.group(1)).weekday()])")
           [ "$WKCHK" != "OK" ] && FAIL="${FAIL} [요일 $WKCHK]"
 
@@ -45,8 +45,8 @@ jobs:
           # 4) 새 필드 본문 반영
           grep -q "이달흐름" output/today.txt || FAIL="${FAIL} [이달흐름 누락]"
 
-          # 5) 마크다운 오염 차단
-          grep -qE '^\\*\\*|^##|^> ' output/today.txt && FAIL="${FAIL} [마크다운 오염]"
+          # 5) 마크다운 오염 차단 (단일 백슬래시 — 과escape 시 grep이 모든 줄 매칭하는 버그 회피)
+          grep -qE '^\*\*|^##|^> ' output/today.txt && FAIL="${FAIL} [마크다운 오염]"
 
           # 6) 코드 무결성: fortune_calc 새 필드 산출
           python3 fortune_calc.py "$TODAY" | python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if all(k in d for k in ['월운','원국_충합','신체_주의']) else 1)" || FAIL="${FAIL} [코드 구버전]"
