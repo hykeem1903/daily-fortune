@@ -32,10 +32,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 🛡 DATE GUARD — today.txt 헤더 vs fortune_calc(무인자) KST 실제 날짜 sync 검증
+      - name: 🛡 DATE+WEEKDAY GUARD — today.txt 헤더(날짜·요일) vs fortune_calc 실제 sync 검증
         run: |
           python3 << 'PYEOF'
-          import json, re, subprocess, sys
+          import json, re, subprocess, sys, datetime
           raw = open('output/today.txt', encoding='utf-8').read()
           first = raw.split('\n')[0]
           m = re.search(r'(\d{4}-\d{2}-\d{2})', first)
@@ -49,12 +49,19 @@ jobs:
           if header != real:
               sys.exit(
                   f'❌ DATE MISMATCH: today.txt 헤더={header} vs fortune_calc(무인자) KST 실제={real}.\n'
-                  f'사이트 빌드 차단. 이는 routine LLM이 SCHEDULE_PROMPT STEP 0-A 룰을 무시하고 \n'
-                  f'어제/내일 날짜로 today.txt를 작성했을 때 발동. \n'
-                  f'5/19, 5/31, 6/5 동일 패턴 재발 방지 가드. \n'
-                  f'fortune_calc.py 무인자 호출 결과가 ground truth.'
+                  f'사이트 빌드 차단. routine LLM이 어제/내일 날짜로 today.txt 작성 시 발동. \n'
+                  f'5/19, 5/31, 6/5 동일 패턴 재발 방지 가드. fortune_calc.py 무인자 = ground truth.'
               )
-          print(f'✅ DATE SYNC: today.txt 헤더={header} = fortune_calc {real}')
+          # ★ WEEKDAY GUARD — 날짜는 맞아도 요일 틀린 발송 차단 (6/25 재발 방지)
+          mw = re.search(r'\(([월화수목금토일])요일\)', first)
+          hdr_wk = mw.group(1) if mw else '?'
+          true_wk = '월화수목금토일'[datetime.date.fromisoformat(header).weekday()]
+          if hdr_wk != true_wk:
+              sys.exit(
+                  f'❌ WEEKDAY MISMATCH: today.txt 헤더요일={hdr_wk} vs {header} 실제요일={true_wk}.\n'
+                  f'사이트 빌드 차단. 날짜는 맞아도 요일이 틀린 케이스. 6/25 재발 방지 가드.'
+              )
+          print(f'✅ DATE+WEEKDAY SYNC: {header} ({true_wk}요일) = fortune_calc {real}')
           PYEOF
 
       - name: HTML 생성 (30일 보관)
