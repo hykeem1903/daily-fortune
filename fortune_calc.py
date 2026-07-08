@@ -436,7 +436,7 @@ def calc(today: date = None):
     macro_tone = "추진월" if macro_raw>=0.5 else "수성월" if macro_raw<=-0.5 else "중립월"
     wolun_domains = [SIPSONG_DOMAIN.get(wol_stem_ss,""), SIPSONG_DOMAIN.get(wol_branch_ss,"")]
     # 신체 주의 (신금=폐·피부 기본 + 그날 기신 화/구신 목이 강하면 해당 장부 추가)
-    body_warn = [f"폐·호흡기·피부(신금 기본)"]
+    body_warn = [f"폐·호흡기·피부·대장(신금 기본)"]
     if "화" in (s_ohaeng, ohaeng): body_warn.append(f"{OHAENG_BODY['화']}(기신 화 발동)")
     if "목" in (s_ohaeng, ohaeng): body_warn.append(f"{OHAENG_BODY['목']}(구신 목)")
     return {
