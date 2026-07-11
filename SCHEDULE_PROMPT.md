@@ -71,7 +71,7 @@ ls requests/pending.json 2>/dev/null && echo "exists" || echo "none"
 ```bash
 git rm requests/pending.json
 git commit -m "맞춤 운세 처리: {name}"
-git push
+git push -u origin "$(git rev-parse --abbrev-ref HEAD)"   # 전용 브랜치 모드면 promote-fortune.yml이 삭제를 main에 반영
 ```
 
 파일이 **없으면**: STEP 0 건너맰고 STEP 1로 진행.
@@ -197,16 +197,29 @@ output/today.txt를 저장·push 하기 전에 다음을 모두 확인한다. �
 **실행 순서 고정**: ① 먼저 **STEP 4(카카오톡 발송)**를 실행 → ② 응답 "성공적으로 보냈습니다" 확인 → ③ **카톡이 성공한 경우에만** 아래 push 실행.
 카톡 실패(또는 KakaotalkChat-MemoChat 도구 못 찾음)면 **push하지 말고** "발송 중단: 카톡 실패 — push 보류"를 출력하고 종료한다. (과거: push는 됐는데 카톡 누락 → 발송된 줄 오인. push만으로는 발송 완료가 아니다.)
 
+**브랜치 모드 (2026-07-11부터)**: 원격 세션에 전용 작업 브랜치(`claude/...`)가 지정되는 경우가 있다. 그 경우 main에 직접 push하지 말고 **지정 브랜치에 push하라** — `.github/workflows/promote-fortune.yml`이 운세 산출물만 main으로 자동 승격하고 페이지 빌드·검증까지 이어준다. 지정 브랜치가 없으면 기존대로 main에 직접 push한다.
+
 ```bash
 mkdir -p output
 git config user.email "fortune-bot@auto"
 git config user.name "Fortune Bot"
-git checkout main 2>/dev/null || git checkout -B main   # 반드시 main 브랜치 (gh-pages 빌드는 main만 트리거)
+CUR=$(git rev-parse --abbrev-ref HEAD)
+if [ "${CUR#claude/}" = "$CUR" ] && [ "$CUR" != "main" ]; then
+  git checkout main 2>/dev/null || git checkout -B main
+  CUR=main
+fi
 echo "$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M') | kakao=ok" >> output/.send_log   # 이번 세션 발송 완결 기록(기록용일 뿐 — 스킵 근거 아님)
 git add output/today.txt output/.send_log
 git commit -m "운세: $TODAY"   # $TODAY는 STEP 0-A 결과. 시스템 date 사용 금지.
-git push origin main           # ★카톡 성공 확인 후에만 이 줄 실행
+# ★카톡 성공 확인 후에만 아래 push 실행
+if [ "$CUR" != "main" ]; then
+  git push -u origin "$CUR"    # 전용 브랜치 모드 — promote-fortune.yml이 main 승격
+else
+  git push origin main
+fi
 ```
+
+**승격 확인 (전용 브랜치 모드일 때만)**: push 후 최대 3분간 origin/main의 output/today.txt 헤더가 $TODAY로 바뀌었는지 확인한다 (30초 간격, 최대 6회 `git fetch origin main` 후 `git show origin/main:output/today.txt | head -1` 검사). 3분 내 승격이 확인되지 않으면 사용자에게 "자동 승격 실패 — Actions promote-fortune 확인 필요"를 알린다(PushNotification). 승격 실패해도 카톡은 이미 발송된 상태이므로 재발송하지 마라.
 
 ---
 

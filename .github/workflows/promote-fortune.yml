@@ -1,0 +1,89 @@
+name: 운세 자동 승격
+
+# 2026-07-11부터 원격 세션이 main 대신 세션 전용 브랜치(claude/*)로만 push할 수 있게 됨.
+# 이 워크플로우가 전용 브랜치의 운세 산출물(output/today.txt · output/.send_log)만 main으로
+# 자동 승격하고, 페이지 빌드·발송 검증까지 이어준다. 세션이 main에 직접 push하는 (구)모드면
+# 이 워크플로우는 발동하지 않는다.
+on:
+  push:
+    branches:
+      - 'claude/**'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: promote-fortune
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 체크아웃 main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: 체크아웃 세션 브랜치
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          path: session
+
+      - name: 산출물만 승격 (다른 파일 변경은 main에 올리지 않음)
+        id: stage
+        run: |
+          set -euo pipefail
+          changed=""
+          for f in output/today.txt output/.send_log; do
+            if [ -f "session/$f" ] && ! cmp -s "session/$f" "$f"; then
+              mkdir -p "$(dirname "$f")"
+              cp "session/$f" "$f"
+              git add "$f"
+              changed="$changed $f"
+            fi
+          done
+          # 맞춤운세 처리 후 요청파일 삭제 반영 (STEP 0)
+          if [ -f requests/pending.json ] && [ ! -f session/requests/pending.json ]; then
+            git rm -q requests/pending.json
+            changed="$changed -requests/pending.json"
+          fi
+          if [ -z "$changed" ]; then
+            echo "승격할 변경 없음"
+            echo "promoted=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # 날짜 가드: today.txt 승격 시 헤더 날짜가 오늘(KST)이어야 함 (어제 날짜 발송 재발 차단)
+          MSG="산출물 승격:${changed}"
+          if echo "$changed" | grep -q today.txt; then
+            TODAY=$(TZ='Asia/Seoul' date +%F)
+            HDR=$(head -1 output/today.txt | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || echo '?')
+            if [ "$HDR" != "$TODAY" ]; then
+              echo "::error::승격 차단 — today.txt 헤더($HDR) ≠ 오늘 KST($TODAY). 세션 브랜치: ${{ github.ref_name }}"
+              exit 1
+            fi
+            MSG="운세: $TODAY (자동 승격)"
+          fi
+          git config user.name "Fortune Bot"
+          git config user.email "fortune-bot@auto"
+          git commit -m "$MSG"
+          git push origin main
+          echo "promoted=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: 페이지 빌드·검증 트리거 (GITHUB_TOKEN push는 push 트리거를 못 깨우므로 직접 dispatch)
+        if: contains(steps.stage.outputs.promoted, 'today.txt')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run build-page.yml --ref main -R "${{ github.repository }}"
+          gh workflow run verify-fortune.yml --ref main -R "${{ github.repository }}"
+
+      - name: 세션 브랜치 정리 (승격 완료분만)
+        if: steps.stage.outputs.promoted != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git push origin --delete "${{ github.ref_name }}" || echo "브랜치 정리 실패 (무시)"
