@@ -1,0 +1,36 @@
+name: fetch-rabbit87
+
+# 매일신문 87년생 토끼띠 운세를 긁어 output/rabbit87.json 저장.
+# 07:02 KST 클라우드 루틴(카톡 발송)이 이 파일을 읽는다.
+# cron은 UTC: 21:20/21:45 = KST 06:20/06:45 (기사 발행 04:30 이후, 재시도 1회 포함)
+on:
+  schedule:
+    - cron: '20 21 * * *'
+    - cron: '45 21 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/fetch_rabbit87.py'
+      - '.github/workflows/fetch-rabbit87.yml'
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 운세 추출
+        run: python3 scripts/fetch_rabbit87.py
+
+      - name: 결과 커밋
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/rabbit87.json
+          git diff --cached --quiet && echo "no changes" || git commit -m "rabbit87: $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
