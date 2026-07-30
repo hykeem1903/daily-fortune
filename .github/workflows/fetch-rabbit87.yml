@@ -2,11 +2,12 @@ name: fetch-rabbit87
 
 # 매일신문 87년생 토끼띠 운세를 긁어 output/rabbit87.json 저장.
 # 07:02 KST 클라우드 루틴(카톡 발송)이 이 파일을 읽는다.
-# cron은 UTC: 21:20/21:45 = KST 06:20/06:45 (기사 발행 04:30 이후, 재시도 1회 포함)
+# cron은 UTC: 20:00/20:40/21:20 = KST 05:00/05:40/06:20 (Actions 지연 최대 1시간 흥수용 3회)
 on:
   schedule:
+    - cron: '0 20 * * *'
+    - cron: '40 20 * * *'
     - cron: '20 21 * * *'
-    - cron: '45 21 * * *'
   workflow_dispatch:
   push:
     paths:
