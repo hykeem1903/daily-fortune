@@ -49,7 +49,7 @@ jobs:
           grep -qE '^\*\*|^##|^> ' output/today.txt && FAIL="${FAIL} [마크다운 오염]"
 
           # 6) 코드 무결성: fortune_calc 새 필드 산출
-          python3 fortune_calc.py "$TODAY" | python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if all(k in d for k in ['월운','원국_충합','신체_주의']) else 1)" || FAIL="${FAIL} [코드 구버전]"
+          python3 fortune_calc.py "$TODAY" | python3 -c "import json,sys;d=json.load(sys.stdin);sys.exit(0 if all(k in d for k in ['월운','원국_충합','신체_주의','수비모드','숨은글자_지장간']) else 1)" || FAIL="${FAIL} [코드 구버전]"
 
           if [ -n "$FAIL" ]; then
             echo "::error::발송 검증 실패 —$FAIL"

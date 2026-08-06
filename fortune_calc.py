@@ -219,6 +219,20 @@ SINSAL_DESC = {
     "역마":   "이동·변화·여행",
     "화개":   "고독·예술·종교·집중",
 }
+# 사맹지(寅申巳亥) — 역마 성질을 띠는 이동성 글자 (광의 보조 표기. 巳는 정통 역마로 이미 커버)
+SAMENG_BRANCHES = {"寅","申","亥"}
+
+# 지장간 (정통 표 — 여기·중기·본기 순). 일진 지지의 숨은 글자를 십성으로 노출 (v2.2)
+JIJANGGAN = {
+    "子":["壬","癸"],       "丑":["癸","辛","己"], "寅":["戊","丙","甲"],
+    "卯":["甲","乙"],       "辰":["乙","癸","戊"], "巳":["戊","庚","丙"],
+    "午":["丙","己","丁"],  "未":["丁","乙","己"], "申":["戊","壬","庚"],
+    "酉":["庚","辛"],       "戌":["辛","丁","戊"], "亥":["戊","甲","壬"],
+}
+
+def _stem_label(stem: str) -> str:
+    """천간 라벨 — 일간 辛은 십성(비견)이 아니라 '나(일간)'로 표기 (v2.2 버그픽스)"""
+    return "나(일간)" if stem == ILGAN else SIPSONG.get(stem, "?")
 
 # 방국·삼합 그룹 (오행 강화 detection)
 SAMHAP_OH_GROUPS = [
@@ -334,10 +348,10 @@ def calc(today: date = None):
             hi = CHUNGKAN_HAP.get(key) or CHUNGKAN_HAP.get(rkey)
             stem_events.append({"type":"합(合)","pair":f"{s}×{ow_s}",
                                 "result":hi[1] if hi else "합",
-                                "ow_ss":SIPSONG.get(ow_s,"?")})
+                                "ow_ss":_stem_label(ow_s)})
         if CHUNGKAN_CHUNG.get(s) == ow_s:
             stem_events.append({"type":"충(沖)","pair":f"{s}↔{ow_s}",
-                                "ow_ss":SIPSONG.get(ow_s,"?"),"note":"천간 직접 충돌"})
+                                "ow_ss":_stem_label(ow_s),"note":"천간 직접 충돌"})
     seun_events    = _cross_events(b, s, SEUN_2026["branch"],       SEUN_2026["stem"],       "세운")
     daewoon_events = _cross_events(b, s, DAEWOON_CURRENT["branch"], DAEWOON_CURRENT["stem"], "대운")
     # ── 세운·대운·월운이 원국 8글자를 직접 충합 (유년충·대운충·월충 — 일진보다 큰 흐름) ──
@@ -354,12 +368,12 @@ def calc(today: date = None):
                 won_cross.append({"layer":_ln, "type":"합(合)", "pair":f"{_lb}×{_wb}", "대상":SIPSONG.get(_wb,"?"), "note":f"{_ln}이 원국 {_wb} 합"})
         for _wst in WONKUK_STEM:
             if CHUNGKAN_CHUNG.get(_ls) == _wst:
-                won_cross.append({"layer":_ln, "type":"충(沖)", "pair":f"{_ls}↔{_wst}", "대상":SIPSONG.get(_wst,"?"), "note":f"{_ln} 천간이 원국 {_wst} 충"})
-    # 충 대상이 용신/뿌리(인성·비겁)면 흔들림 흉, 그 외 충은 변동, 합은 안정
+                won_cross.append({"layer":_ln, "type":"충(沖)", "pair":f"{_ls}↔{_wst}", "대상":_stem_label(_wst), "note":f"{_ln} 천간이 원국 {_wst} 충"})
+    # 충 대상이 용신/뿌리(인성·비겁·일간)면 흔들림 흉, 그 외 충은 변동, 합은 안정
     woncross_sc = 0.0
     for _e in won_cross:
         if _e["type"].startswith("충"):
-            woncross_sc -= 0.18 if _e["대상"] in ("정인","편인","비견","겁재") else 0.10
+            woncross_sc -= 0.18 if _e["대상"] in ("정인","편인","비견","겁재","나(일간)") else 0.10
         else:
             woncross_sc += 0.05
     # 자형 (일진 지지가 自刑 글자이고 원국에 같은 글자 있음)
@@ -370,6 +384,11 @@ def calc(today: date = None):
         f"{name}({SINSAL_DESC[name]})"
         for name, branches in SINSAL_RULES.items() if b in branches
     ]
+    # 사맹지 이동성 보조 (v2.2 — 정통 역마 巳와 별개의 광의 표기)
+    if b in SAMENG_BRANCHES:
+        sinsal_active.append("이동성글자·사맹지(보조 — 이동·변화 기운이 보조적으로 작동)")
+    # 지장간 십성 레이어 (v2.2 — 일진 지지의 숨은 글자 전체를 십성으로. 辛도 '비견'=통근 표기, 원국 일간 자리가 아님)
+    jijanggan_sipsong = [f"{js}({SIPSONG.get(js, '?')})" for js in JIJANGGAN.get(b, [])]
     # 방국·삼합 형성 (원국 + 일진)
     all_b_full = list(WONKUK_BRANCH) + [b]
     bset = set(all_b_full)
@@ -439,6 +458,14 @@ def calc(today: date = None):
     body_warn = [f"폐·호흡기·피부·대장(신금 기본)"]
     if "화" in (s_ohaeng, ohaeng): body_warn.append(f"{OHAENG_BODY['화']}(기신 화 발동)")
     if "목" in (s_ohaeng, ohaeng): body_warn.append(f"{OHAENG_BODY['목']}(구신 목)")
+    # 수비모드 (v2.2 버그픽스 — 지지 충 합산 2건 이상이면 '폭풍 속 전력질주' 차단, GO를 수비형으로 강제)
+    chung_cnt = sum(e.get("강도", 1) for e in events if e["type"].startswith("충"))
+    subi_mode = chung_cnt >= 2
+    subi_reason = (
+        f"일진 지지 충 합산 {chung_cnt}건 — 힘이 있어도 사방에서 부딪히는 날. "
+        "큰 결정 금지, 기존 업무 마무리·루틴 유지·중요 일정 조정으로 강제"
+        if subi_mode else ""
+    )
     return {
         "date":            str(today),
         "일진":            f"{s}{b}({s_kr}{b_kr})",
@@ -463,6 +490,9 @@ def calc(today: date = None):
         "삼합완성":        samhap_complete,
         "방국삼합형성":    groups_formed,
         "신살_발동":       sinsal_active,
+        "숨은글자_지장간": jijanggan_sipsong,
+        "수비모드":        subi_mode,
+        "수비모드_사유":   subi_reason,
         "격국":            GYEOKGUK,
         "세운_notes":      SEUN_2026["notes"],
         "대운":            DAEWOON_CURRENT,
