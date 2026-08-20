@@ -1,0 +1,62 @@
+name: naver-land-probe
+
+# 어느 실행 환경에서 네이버 부동산 공개 페이지가 응답하는지 1회 확인한다.
+# 매물 데이터는 저장하지 않고 상태코드·크기·지연시간만 output/naver-land-probe.json 에 기록한다.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/naver-land-probe.yml'
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check reachability
+        run: |
+          set +e
+          IP=$(curl -s -m 10 https://api.ipify.org || echo unknown)
+          mkdir -p output
+          {
+            echo '{'
+            echo "  \"runner_ip\": \"$IP\","
+            echo "  \"probed_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+            echo '  "note": "HTTP status only. No listing data collected.",'
+            echo '  "results": {'
+            first=1
+            for entry in \
+              'www|https://www.naver.com/' \
+              'land|https://land.naver.com/' \
+              'mland|https://m.land.naver.com/' \
+              'finland|https://fin.land.naver.com/' \
+              'newland|https://new.land.naver.com/' ; do
+              key=${entry%%|*}
+              url=${entry#*|}
+              t0=$(date +%s%3N)
+              code=$(curl -s -o /dev/null -m 20 -w '%{http_code}' "$url")
+              rc=$?
+              t1=$(date +%s%3N)
+              [ $first -eq 0 ] && echo ','
+              first=0
+              printf '    "%s": {"http": "%s", "curl_rc": %s, "ms": %s}' "$key" "$code" "$rc" "$((t1-t0))"
+            done
+            echo ''
+            echo '  }'
+            echo '}'
+          } > output/naver-land-probe.json
+          cat output/naver-land-probe.json
+
+      - name: Commit result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/naver-land-probe.json
+          git diff --cached --quiet && echo 'no changes' || git commit -m "probe: naver-land reachability $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
