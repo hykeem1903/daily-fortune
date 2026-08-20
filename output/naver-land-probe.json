@@ -1,0 +1,12 @@
+{
+  "runner_ip": "52.159.247.199",
+  "probed_at": "2026-08-20T08:35:08Z",
+  "note": "HTTP status only. No listing data collected.",
+  "results": {
+    "www": {"http": "200", "curl_rc": 0, "ms": 702},
+    "land": {"http": "403", "curl_rc": 0, "ms": 824},
+    "mland": {"http": "000", "curl_rc": 28, "ms": 20011},
+    "finland": {"http": "000", "curl_rc": 28, "ms": 20011},
+    "newland": {"http": "000", "curl_rc": 28, "ms": 20011}
+  }
+}
