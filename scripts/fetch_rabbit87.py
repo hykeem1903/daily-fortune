@@ -26,6 +26,16 @@ def fetch(url, data=None):
     return urllib.request.urlopen(req, timeout=30).read().decode("utf-8", "replace")
 
 
+# 오늘자 ok 데이터가 이미 있으면 종료 — 백업 트리거 재실행이 실패로 덮어쓰는 것 방지
+try:
+    with open("output/rabbit87.json", encoding="utf-8") as f:
+        _prev = json.load(f)
+    if _prev.get("status") == "ok" and _prev.get("date") == today_str:
+        print(json.dumps(_prev, ensure_ascii=False))
+        sys.exit(0)
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+
 try:
     ids = []
     for st in ("1", "21"):

@@ -2,12 +2,15 @@ name: fetch-rabbit87
 
 # 매일신문 87년생 토끼띠 운세를 긁어 output/rabbit87.json 저장.
 # 07:02 KST 클라우드 루틴(카톡 발송)이 이 파일을 읽는다.
-# cron은 UTC: 20:00/20:40/21:20 = KST 05:00/05:40/06:20 (Actions 지연 최대 1시간 흥수용 3회)
+# cron은 UTC: 20:06/20:46/21:26 = KST 05:06/05:46/06:26
+# 정각·20분·40분은 Actions cron 큐 혼잡으로 지연·누락이 잦아(8/28 24시간+ 미발동 사고) 어중간한 분으로 회피.
+# cron이 통째로 안 도는 날 대비: promote-fortune.yml이 매일 아침 승격 직후 이 워크플로우를 백업 dispatch.
+# 스크립트가 오늘자 ok 데이터 존재 시 즉시 종료하므로 중복 실행은 무해.
 on:
   schedule:
-    - cron: '0 20 * * *'
-    - cron: '40 20 * * *'
-    - cron: '20 21 * * *'
+    - cron: '6 20 * * *'
+    - cron: '46 20 * * *'
+    - cron: '26 21 * * *'
   workflow_dispatch:
   push:
     paths:

@@ -79,6 +79,9 @@ jobs:
         run: |
           gh workflow run build-page.yml --ref main -R "${{ github.repository }}"
           gh workflow run verify-fortune.yml --ref main -R "${{ github.repository }}"
+          # 토끼띠 수집 백업 트리거: cron이 지연·누락돼도 매일 아침 이 push 기반 승격은
+          # 확실히 돌므로 여기서 한 번 더 dispatch (오늘자 ok면 스크립트가 즉시 종료해 무해)
+          gh workflow run fetch-rabbit87.yml --ref main -R "${{ github.repository }}"
 
       - name: 세션 브랜치 정리 (승격 완료분만)
         if: steps.stage.outputs.promoted != ''
