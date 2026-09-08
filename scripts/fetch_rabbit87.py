@@ -40,7 +40,7 @@ try:
     ids = []
     for st in ("1", "21"):
         data = urllib.parse.urlencode({"qt": "더사주", "nh": "20", "st": st, "adv": "0", "sw": "0", "searchType": "0"}).encode()
-        page = fetch("http://search.imaeil.com/RSA/front_new/Search.jsp", data)
+        page = fetch("https://search.imaeil.com/RSA/front_new/Search.jsp", data)
         ids += re.findall(r"page/view/(\d+)", page)
     ids = list(dict.fromkeys(ids))
     if not ids:
