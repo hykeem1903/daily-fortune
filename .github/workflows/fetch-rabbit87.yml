@@ -2,10 +2,10 @@ name: fetch-rabbit87
 
 # 매일신문 87년생 토끼띠 운세를 긁어 output/rabbit87.json 저장.
 # 07:02 KST 클라우드 루틴(카톡 발송)이 이 파일을 읽는다.
-# cron은 UTC: 20:06/20:46/21:26 = KST 05:06/05:46/06:26
-# 정각·20분·40분은 Actions cron 큐 혼잡으로 지연·누락이 잦아(8/28 24시간+ 미발동 사고) 어중간한 분으로 회피.
-# cron이 통째로 안 도는 날 대비: promote-fortune.yml이 매일 아침 승격 직후 이 워크플로우를 백업 dispatch.
-# 스크립트가 오늘자 ok 데이터 존재 시 즉시 종료하므로 중복 실행은 무해.
+# 실제로 데이터를 만드는 건 promote-fortune.yml의 백업 dispatch(~07:10 KST)다.
+# 아래 cron(KST 05:06/05:46/06:26)은 9~11월 내내 3~5시간 지연돼 09~12시에야 돌았다 — 사후 보정용일 뿐.
+# 매일신문 검색이 간헐적으로 0건을 돌려줘(9/8·11/7) 단발 실행이 실패하면 몇 시간 방치됐으므로,
+# 실패 시 job 안에서 5분 간격으로 최대 2시간 재시도하고 매 시도 결과를 바로 커밋한다.
 on:
   schedule:
     - cron: '6 20 * * *'
@@ -22,19 +22,36 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: fetch-rabbit87
+  cancel-in-progress: false
+
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    timeout-minutes: 135
     steps:
       - uses: actions/checkout@v4
 
-      - name: 운세 추출
-        run: python3 scripts/fetch_rabbit87.py
-
-      - name: 결과 커밋
+      - name: 운세 추출 (실패 시 5분 간격 최대 25회 재시도)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add output/rabbit87.json
-          git diff --cached --quiet && echo "no changes" || git commit -m "rabbit87: $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push
+          commit() {
+            git add output/rabbit87.json
+            git diff --cached --quiet && return 0
+            git commit -q -m "rabbit87: $(date -u +%Y-%m-%dT%H:%MZ)"
+            for n in 1 2 3; do
+              git pull -q --rebase origin main && git push -q origin HEAD:main && return 0
+              sleep 5
+            done
+            echo "::warning::push 실패"
+          }
+          for i in $(seq 1 25); do
+            python3 scripts/fetch_rabbit87.py
+            commit
+            [ "$(jq -r .status output/rabbit87.json)" = "ok" ] && exit 0
+            [ "$i" -lt 25 ] && echo "시도 $i 실패 — 5분 후 재시도" && sleep 300
+          done
+          echo "::error::25회 시도 모두 실패"
+          exit 1
