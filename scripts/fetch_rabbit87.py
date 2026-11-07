@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """매일신문 더사주 띠별운세에서 87년생 토끼띠 한 줄을 추출해 output/rabbit87.json 저장.
 
-GitHub Actions(fetch-rabbit87.yml)가 매일 KST 06:20/06:45에 실행.
+GitHub Actions(fetch-rabbit87.yml)가 실행 (주 트리거: promote-fortune.yml 백업 dispatch ~07:10 KST).
 날짜 매칭은 og:title의 "M월 D일"만 신뢰 (URL 숫자 ID는 업로드 시각이라 불일치).
 """
 import json, re, html, os, sys, urllib.request, urllib.parse
